@@ -104,6 +104,22 @@ func (m Matrix) Softmax(T float64) Matrix {
 	return output
 }
 
+// Sum sums the rows of a matrix
+func (m Matrix) Sum() Matrix {
+	o := Matrix{
+		Cols: m.Cols,
+		Rows: 1,
+		Data: make([]float64, m.Cols),
+	}
+	for i := 0; i < m.Rows; i++ {
+		offset := i * m.Cols
+		for j := range o.Data {
+			o.Data[j] += m.Data[offset+j]
+		}
+	}
+	return o
+}
+
 // T tramsposes a matrix
 func (m Matrix) T() Matrix {
 	o := Matrix{
