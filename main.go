@@ -81,15 +81,13 @@ func (m Mixer) Mix() [256]byte {
 			x.Data = append(x.Data, float64(v)/sum)
 		}
 	}
-	y := SelfAttention(x, x, x).Sum().Softmax(1)
-	max := 0.0
+	y := SelfAttention(x, x, x).Sum()
+	sum := 0.0
 	for _, v := range y.Data {
-		if v > max {
-			max = v
-		}
+		sum += v
 	}
 	for i := range mix {
-		mix[i] = byte(128 * y.Data[i] / max)
+		mix[i] = byte(128 * y.Data[i] / sum)
 	}
 	return mix
 }
