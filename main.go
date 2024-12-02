@@ -12,6 +12,11 @@ import (
 	"math"
 )
 
+const (
+	// Size is the number of histograms
+	Size = 4
+)
+
 //go:embed 10.txt.utf-8.bz2
 var Iris embed.FS
 
@@ -20,16 +25,80 @@ type Histogram struct {
 	Vector [256]byte
 	Buffer [128]byte
 	Index  int
+	Size   int
+}
+
+// NewHistogram make a new histogram
+func NewHistogram(size int) Histogram {
+	h := Histogram{
+		Size: size,
+	}
+	return h
 }
 
 // Add adds a symbol to the histogram
 func (h *Histogram) Add(s byte) {
-	h.Index = (h.Index + 1) % 128
-	if symbol := h.Buffer[h.Index]; h.Vector[symbol] > 0 {
+	index := (h.Index + 1) % h.Size
+	if symbol := h.Buffer[index]; h.Vector[symbol] > 0 {
 		h.Vector[symbol]--
 	}
-	h.Buffer[h.Index] = s
+	h.Buffer[index] = s
 	h.Vector[s]++
+	h.Index = index
+}
+
+// Mixer mixes several histograms together
+type Mixer struct {
+	Histograms []Histogram
+}
+
+// NewMixer makes a new mixer
+func NewMixer() Mixer {
+	histograms := make([]Histogram, Size)
+	//histograms[0] = NewHistogram(1)
+	//histograms[1] = NewHistogram(2)
+	//histograms[2] = NewHistogram(4)
+	//histograms[3] = NewHistogram(8)
+	histograms[0] = NewHistogram(16)
+	histograms[1] = NewHistogram(32)
+	histograms[2] = NewHistogram(64)
+	histograms[3] = NewHistogram(128)
+	return Mixer{
+		Histograms: histograms,
+	}
+}
+
+// Mix mixes the histograms
+func (m Mixer) Mix() [256]byte {
+	mix := [256]byte{}
+	x := NewMatrix(256, Size)
+	for i := range m.Histograms {
+		sum := 0.0
+		for _, v := range m.Histograms[i].Vector {
+			sum += float64(v)
+		}
+		for _, v := range m.Histograms[i].Vector {
+			x.Data = append(x.Data, float64(v)/sum)
+		}
+	}
+	y := SelfAttention(x, x, x).Sum().Softmax(1)
+	max := 0.0
+	for _, v := range y.Data {
+		if v > max {
+			max = v
+		}
+	}
+	for i := range mix {
+		mix[i] = byte(128 * y.Data[i] / max)
+	}
+	return mix
+}
+
+// Add adds a symbol to a mixer
+func (m Mixer) Add(s byte) {
+	for i := range m.Histograms {
+		m.Histograms[i].Add(s)
+	}
 }
 
 // TXT is a context
@@ -49,27 +118,28 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	h := Histogram{}
+	m := NewMixer()
 	txts := make([]TXT, 0, 8)
 	for i, s := range data[:len(data)-1] {
-		h.Add(s)
+		m.Add(s)
 		txt := TXT{
-			Vector: h.Vector,
+			Vector: m.Mix(),
 			Symbol: data[i+1],
 		}
 		txts = append(txts, txt)
 	}
 	input := []byte("In the beginning God created the heaven and the eart")
-	h = Histogram{}
+	m = NewMixer()
 	for _, s := range input {
-		h.Add(s)
+		m.Add(s)
 	}
 	for j := 0; j < 16; j++ {
+		vector := m.Mix()
 		symbol, max := byte(0), -1.0
 		for _, txt := range txts {
 			aa, bb, ab := 0.0, 0.0, 0.0
-			for i := range h.Vector {
-				a, b := float64(h.Vector[i]), float64(txt.Vector[i])
+			for i := range vector {
+				a, b := float64(vector[i]), float64(txt.Vector[i])
 				aa += a * a
 				bb += b * b
 				ab += a * b
@@ -80,6 +150,6 @@ func main() {
 			}
 		}
 		fmt.Printf("%d %c\n", symbol, symbol)
-		h.Add(symbol)
+		m.Add(symbol)
 	}
 }
