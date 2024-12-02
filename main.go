@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 )
 
 const (
@@ -147,7 +148,7 @@ func main() {
 				max, symbol = s, txt.Symbol
 			}
 		}
-		fmt.Printf("%d %c\n", symbol, symbol)
+		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
 	}
 }
