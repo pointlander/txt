@@ -7,9 +7,11 @@ package main
 import (
 	"compress/bzip2"
 	"embed"
+	"flag"
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strconv"
 )
 
@@ -106,36 +108,76 @@ type TXT struct {
 	Symbol byte
 }
 
+var (
+	// FlagBuild is for building the vector database
+	FlagBuild = flag.Bool("build", false, "build the vector database")
+	// FlagQuery is for doing a lookup in the database
+	FlagQuery = flag.String("query", "In the beginning God created the heaven and the eart", "query for vector database")
+)
+
 func main() {
-	file, err := Iris.Open("10.txt.utf-8.bz2")
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	reader := bzip2.NewReader(file)
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		panic(err)
-	}
-	m := NewMixer()
-	txts := make([]TXT, 0, 8)
-	for i, s := range data[:len(data)-1] {
-		m.Add(s)
-		txt := TXT{
-			Vector: m.Mix(),
-			Symbol: data[i+1],
+	flag.Parse()
+
+	if *FlagBuild {
+		file, err := Iris.Open("10.txt.utf-8.bz2")
+		if err != nil {
+			panic(err)
 		}
-		txts = append(txts, txt)
+		defer file.Close()
+		reader := bzip2.NewReader(file)
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			panic(err)
+		}
+		db, err := os.Create("vectors.bin")
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+		m := NewMixer()
+		for i, s := range data[:len(data)-1] {
+			m.Add(s)
+			vector := m.Mix()
+			_, err := db.Write(vector[:])
+			if err != nil {
+				panic(err)
+			}
+			_, err = db.Write(data[i+1 : i+2])
+			if err != nil {
+				panic(err)
+			}
+		}
+		return
 	}
-	input := []byte("In the beginning God created the heaven and the eart")
-	m = NewMixer()
+
+	input := []byte(*FlagQuery)
+	vectors, err := os.Open("vectors.bin")
+	if err != nil {
+		panic(err)
+	}
+	defer vectors.Close()
+	m := NewMixer()
 	for _, s := range input {
 		m.Add(s)
 	}
+	txt := TXT{}
+	sym := make([]byte, 1)
 	for j := 0; j < 16; j++ {
 		vector := m.Mix()
 		symbol, max := byte(0), -1.0
-		for _, txt := range txts {
+		for {
+			n, _ := vectors.Read(txt.Vector[:])
+			if n == 0 {
+				break
+			}
+			if n != 256 {
+				panic("didn't get 256 bytes")
+			}
+			n, _ = vectors.Read(sym)
+			if n != 1 {
+				panic("missing symbol")
+			}
+			txt.Symbol = sym[0]
 			aa, bb, ab := 0.0, 0.0, 0.0
 			for i := range vector {
 				a, b := float64(vector[i]), float64(txt.Vector[i])
@@ -147,6 +189,10 @@ func main() {
 			if s > max {
 				max, symbol = s, txt.Symbol
 			}
+		}
+		_, err := vectors.Seek(0, 0)
+		if err != nil {
+			panic(err)
 		}
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
