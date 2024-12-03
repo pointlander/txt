@@ -15,7 +15,7 @@ import (
 
 const (
 	// Size is the number of histograms
-	Size = 4
+	Size = 8
 )
 
 //go:embed 10.txt.utf-8.bz2
@@ -56,14 +56,14 @@ type Mixer struct {
 // NewMixer makes a new mixer
 func NewMixer() Mixer {
 	histograms := make([]Histogram, Size)
-	//histograms[0] = NewHistogram(1)
-	//histograms[1] = NewHistogram(2)
-	//histograms[2] = NewHistogram(4)
-	//histograms[3] = NewHistogram(8)
-	histograms[0] = NewHistogram(16)
-	histograms[1] = NewHistogram(32)
-	histograms[2] = NewHistogram(64)
-	histograms[3] = NewHistogram(128)
+	histograms[0] = NewHistogram(1)
+	histograms[1] = NewHistogram(2)
+	histograms[2] = NewHistogram(4)
+	histograms[3] = NewHistogram(8)
+	histograms[4] = NewHistogram(16)
+	histograms[5] = NewHistogram(32)
+	histograms[6] = NewHistogram(64)
+	histograms[7] = NewHistogram(128)
 	return Mixer{
 		Histograms: histograms,
 	}
