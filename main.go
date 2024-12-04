@@ -113,6 +113,8 @@ var (
 	FlagBuild = flag.Bool("build", false, "build the vector database")
 	// FlagQuery is for doing a lookup in the database
 	FlagQuery = flag.String("query", "In the beginning God created the heaven and the eart", "query for vector database")
+	// FlagCount number of symbols to generate
+	FlagCount = flag.Int("count", 33, "number of symbols to generate")
 )
 
 func main() {
@@ -162,7 +164,7 @@ func main() {
 	}
 	txt := TXT{}
 	sym := make([]byte, 1)
-	for j := 0; j < 16; j++ {
+	for j := 0; j < *FlagCount; j++ {
 		vector := m.Mix()
 		symbol, max := byte(0), -1.0
 		for {
