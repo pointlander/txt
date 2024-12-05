@@ -108,6 +108,62 @@ type TXT struct {
 	Symbol byte
 }
 
+// TXTWriter is a txt file writer
+type TXTWriter struct {
+	File *os.File
+}
+
+// NewTXTWriter creates a new TXTWriter
+func NewTXTWriter(file *os.File) TXTWriter {
+	return TXTWriter{
+		File: file,
+	}
+}
+
+// Write writes a txt record to the file
+func (t *TXTWriter) Write(txt *TXT) {
+	_, err := t.File.Write(txt.Vector[:])
+	if err != nil {
+		panic(err)
+	}
+	_, err = t.File.Write([]byte{txt.Symbol})
+	if err != nil {
+		panic(err)
+	}
+}
+
+// TXTReader is a txt file reader
+type TXTReader struct {
+	File *os.File
+}
+
+// NewTXTReader make a new TXTReader
+func NewTXTReader(file *os.File) TXTReader {
+	return TXTReader{
+		File: file,
+	}
+}
+
+// Read reads a txt record
+func (t *TXTReader) Read(txt *TXT) bool {
+	buffer := make([]byte, 257)
+	n, _ := t.File.Read(buffer)
+	if n == 0 {
+		return true
+	}
+	copy(txt.Vector[:], buffer[:256])
+	txt.Symbol = buffer[256]
+	return false
+}
+
+// Reset resets the reader to the beginning of the file
+func (t *TXTReader) Reset() {
+	_, err := t.File.Seek(0, 0)
+	if err != nil {
+		panic(err)
+	}
+}
+
 var (
 	// FlagBuild is for building the vector database
 	FlagBuild = flag.Bool("build", false, "build the vector database")
@@ -137,17 +193,12 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
+		txt, writer := TXT{}, NewTXTWriter(db)
 		for i, s := range data[:len(data)-1] {
 			m.Add(s)
-			vector := m.Mix()
-			_, err := db.Write(vector[:])
-			if err != nil {
-				panic(err)
-			}
-			_, err = db.Write(data[i+1 : i+2])
-			if err != nil {
-				panic(err)
-			}
+			txt.Vector = m.Mix()
+			txt.Symbol = data[i+1]
+			writer.Write(&txt)
 		}
 		return
 	}
@@ -162,24 +213,12 @@ func main() {
 	for _, s := range input {
 		m.Add(s)
 	}
-	txt := TXT{}
-	sym := make([]byte, 1)
+	txt, reader := TXT{}, NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
 		vector := m.Mix()
 		symbol, max := byte(0), -1.0
-		for {
-			n, _ := vectors.Read(txt.Vector[:])
-			if n == 0 {
-				break
-			}
-			if n != 256 {
-				panic("didn't get 256 bytes")
-			}
-			n, _ = vectors.Read(sym)
-			if n != 1 {
-				panic("missing symbol")
-			}
-			txt.Symbol = sym[0]
+		done := reader.Read(&txt)
+		for !done {
 			aa, bb, ab := 0.0, 0.0, 0.0
 			for i := range vector {
 				a, b := float64(vector[i]), float64(txt.Vector[i])
@@ -191,11 +230,9 @@ func main() {
 			if s > max {
 				max, symbol = s, txt.Symbol
 			}
+			done = reader.Read(&txt)
 		}
-		_, err := vectors.Seek(0, 0)
-		if err != nil {
-			panic(err)
-		}
+		reader.Reset()
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
 	}
