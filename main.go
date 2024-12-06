@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 )
 
@@ -104,6 +106,7 @@ func (m Mixer) Add(s byte) {
 
 // TXT is a context
 type TXT struct {
+	Index  uint64
 	Vector [256]byte
 	Symbol byte
 }
@@ -130,6 +133,14 @@ func (t *TXTWriter) Write(txt *TXT) {
 	if err != nil {
 		panic(err)
 	}
+	index := make([]byte, 8)
+	for i := 0; i < 8; i++ {
+		index[i] = byte(txt.Index >> ((7 - i) * 8))
+	}
+	_, err = t.File.Write(index)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // TXTReader is a txt file reader
@@ -146,13 +157,19 @@ func NewTXTReader(file *os.File) TXTReader {
 
 // Read reads a txt record
 func (t *TXTReader) Read(txt *TXT) bool {
-	buffer := make([]byte, 257)
+	buffer := make([]byte, 256+1+8)
 	n, _ := t.File.Read(buffer)
 	if n == 0 {
 		return true
 	}
 	copy(txt.Vector[:], buffer[:256])
 	txt.Symbol = buffer[256]
+	index := uint64(0)
+	for i := 0; i < 8; i++ {
+		index <<= 8
+		index |= uint64(buffer[257+i])
+	}
+	txt.Index = index
 	return false
 }
 
@@ -162,6 +179,18 @@ func (t *TXTReader) Reset() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// CS is cosine similarity
+func (t *TXT) CS(vector *[256]byte) float64 {
+	aa, bb, ab := 0.0, 0.0, 0.0
+	for i := range vector {
+		a, b := float64(vector[i]), float64(t.Vector[i])
+		aa += a * a
+		bb += b * b
+		ab += a * b
+	}
+	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
 var (
@@ -193,11 +222,35 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
-		txt, writer := TXT{}, NewTXTWriter(db)
+		rng := rand.New(rand.NewSource(1))
+		splits := [64][256]byte{}
+		for i := range splits {
+			for j := range splits[i] {
+				splits[i][j] = byte(rng.Uint32())
+			}
+		}
+		txts := make([]TXT, 0, 8)
 		for i, s := range data[:len(data)-1] {
 			m.Add(s)
+			txt := TXT{}
 			txt.Vector = m.Mix()
 			txt.Symbol = data[i+1]
+			for j := range splits {
+				txt.Index <<= 1
+				s := txt.CS(&splits[j])
+				if s > .5 {
+					txt.Index |= 1
+				}
+			}
+			txts = append(txts, txt)
+		}
+
+		sort.Slice(txts, func(i, j int) bool {
+			return txts[i].Index < txts[j].Index
+		})
+
+		writer := NewTXTWriter(db)
+		for _, txt := range txts {
 			writer.Write(&txt)
 		}
 		return
@@ -219,14 +272,7 @@ func main() {
 		symbol, max := byte(0), -1.0
 		done := reader.Read(&txt)
 		for !done {
-			aa, bb, ab := 0.0, 0.0, 0.0
-			for i := range vector {
-				a, b := float64(vector[i]), float64(txt.Vector[i])
-				aa += a * a
-				bb += b * b
-				ab += a * b
-			}
-			s := ab / (math.Sqrt(aa) * math.Sqrt(bb))
+			s := txt.CS(&vector)
 			if s > max {
 				max, symbol = s, txt.Symbol
 			}
