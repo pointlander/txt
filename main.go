@@ -21,7 +21,7 @@ const (
 	// Size is the number of histograms
 	Size = 8
 	// Average is the split average
-	Average = 0.12748530720515008
+	Average = 0.12502159179100905
 )
 
 //go:embed 10.txt.utf-8.bz2
@@ -195,14 +195,26 @@ func (t *TXT) CS(vector *[256]byte) float64 {
 	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
+// CS is float64 cosine similarity
+func (t *TXT) CSFloat64(vector *[256]float64) float64 {
+	aa, bb, ab := 0.0, 0.0, 0.0
+	for i := range vector {
+		a, b := vector[i], float64(t.Vector[i])
+		aa += a * a
+		bb += b * b
+		ab += a * b
+	}
+	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
+}
+
 // Splits are the split vectors
-var Splits [64][256]byte
+var Splits [64][256]float64
 
 func init() {
 	rng := rand.New(rand.NewSource(1))
 	for i := range Splits {
 		for j := range Splits[i] {
-			Splits[i][j] = byte(rng.Uint32())
+			Splits[i][j] = rng.Float64()
 		}
 	}
 }
@@ -244,7 +256,7 @@ func main() {
 			txt.Vector = m.Mix()
 			txt.Symbol = data[i+1]
 			for j := range Splits {
-				s := txt.CS(&Splits[j])
+				s := txt.CSFloat64(&Splits[j])
 				avg += s
 				count++
 			}
@@ -255,7 +267,7 @@ func main() {
 		for i := range txts {
 			for j := range Splits {
 				txts[i].Index <<= 1
-				s := txts[i].CS(&Splits[j])
+				s := txts[i].CSFloat64(&Splits[j])
 				if s > avg {
 					txts[i].Index |= 1
 				}
@@ -293,7 +305,7 @@ func main() {
 		vector.Vector = m.Mix()
 		for j := range Splits {
 			vector.Index <<= 1
-			s := vector.CS(&Splits[j])
+			s := vector.CSFloat64(&Splits[j])
 			if s > Average {
 				vector.Index |= 1
 			}
