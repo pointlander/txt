@@ -20,6 +20,8 @@ import (
 const (
 	// Size is the number of histograms
 	Size = 8
+	// Line is the size of a line
+	Line = 256 + 1 + 8
 	// Average is the split average
 	Average = 0.12502159179100905
 )
@@ -159,7 +161,7 @@ func NewTXTReader(file *os.File) TXTReader {
 
 // Read reads a txt record
 func (t *TXTReader) Read(txt *TXT) bool {
-	buffer := make([]byte, 256+1+8)
+	buffer := make([]byte, Line)
 	n, _ := t.File.Read(buffer)
 	if n == 0 {
 		return true
@@ -298,7 +300,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	length := stat.Size() / (256 + 1 + 8)
+	length := stat.Size() / Line
 	txt, reader := TXT{}, NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
 		var vector TXT
@@ -310,32 +312,43 @@ func main() {
 				vector.Index |= 1
 			}
 		}
-		index := sort.Search(int(length), func(i int) bool {
-			_, err := vectors.Seek(int64(i*(256+1+8)), 0)
+		symbol, max := byte(0), -1.0
+		search := func(query uint64) {
+			index := sort.Search(int(length), func(i int) bool {
+				_, err := vectors.Seek(int64(i*Line), 0)
+				if err != nil {
+					panic(err)
+				}
+				txt := TXT{}
+				reader.Read(&txt)
+				return txt.Index >= query
+			})
+			reader.Reset()
+
+			_, err := vectors.Seek(int64(index*Line), 0)
 			if err != nil {
 				panic(err)
 			}
-			txt := TXT{}
-			reader.Read(&txt)
-			return txt.Index >= vector.Index
-		})
-		fmt.Println(index)
-		reader.Reset()
-		//symbol, max := byte(0), -1.0
-		_, err := vectors.Seek(int64(index*(256+1+8)), 0)
-		if err != nil {
-			panic(err)
-		}
-		reader.Read(&txt)
-		symbol := txt.Symbol
-		/*for !done {
-			s := txt.CS(&vector.Vector)
-			if s > max {
-				max, symbol = s, txt.Symbol
+			done := reader.Read(&txt)
+			last := txt.Index
+			for !done {
+				s := txt.CS(&vector.Vector)
+				if s > max {
+					max, symbol = s, txt.Symbol
+				}
+				done = reader.Read(&txt)
+				if last != txt.Index {
+					break
+				}
+				last = txt.Index
 			}
-			done = reader.Read(&txt)
-		}*/
-		reader.Reset()
+			reader.Reset()
+		}
+		search(vector.Index)
+		for k := 0; k < 64; k++ {
+			query := vector.Index ^ (1 << k)
+			search(query)
+		}
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
 	}
