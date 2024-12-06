@@ -226,6 +226,8 @@ var (
 	FlagBuild = flag.Bool("build", false, "build the vector database")
 	// FlagQuery is for doing a lookup in the database
 	FlagQuery = flag.String("query", "In the beginning God created the heaven and the eart", "query for vector database")
+	// FlagBrute brute force mode
+	FlagBrute = flag.Bool("brute", false, "brute force mode")
 	// FlagCount number of symbols to generate
 	FlagCount = flag.Int("count", 33, "number of symbols to generate")
 )
@@ -295,6 +297,25 @@ func main() {
 	m := NewMixer()
 	for _, s := range input {
 		m.Add(s)
+	}
+	if *FlagBrute {
+		txt, reader := TXT{}, NewTXTReader(vectors)
+		for j := 0; j < *FlagCount; j++ {
+			vector := m.Mix()
+			symbol, max := byte(0), -1.0
+			done := reader.Read(&txt)
+			for !done {
+				s := txt.CS(&vector)
+				if s > max {
+					max, symbol = s, txt.Symbol
+				}
+				done = reader.Read(&txt)
+			}
+			reader.Reset()
+			fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
+			m.Add(symbol)
+		}
+		return
 	}
 	stat, err := vectors.Stat()
 	if err != nil {
