@@ -20,6 +20,10 @@ import (
 const (
 	// Size is the number of histograms
 	Size = 8
+	// Line is the size of a line
+	Line = 256 + 1 + 8
+	// Average is the split average
+	Average = 0.12502159179100905
 )
 
 //go:embed 10.txt.utf-8.bz2
@@ -157,7 +161,7 @@ func NewTXTReader(file *os.File) TXTReader {
 
 // Read reads a txt record
 func (t *TXTReader) Read(txt *TXT) bool {
-	buffer := make([]byte, 256+1+8)
+	buffer := make([]byte, Line)
 	n, _ := t.File.Read(buffer)
 	if n == 0 {
 		return true
@@ -193,6 +197,30 @@ func (t *TXT) CS(vector *[256]byte) float64 {
 	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
+// CS is float64 cosine similarity
+func (t *TXT) CSFloat64(vector *[256]float64) float64 {
+	aa, bb, ab := 0.0, 0.0, 0.0
+	for i := range vector {
+		a, b := vector[i], float64(t.Vector[i])
+		aa += a * a
+		bb += b * b
+		ab += a * b
+	}
+	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
+}
+
+// Splits are the split vectors
+var Splits [64][256]float64
+
+func init() {
+	rng := rand.New(rand.NewSource(1))
+	for i := range Splits {
+		for j := range Splits[i] {
+			Splits[i][j] = rng.Float64()
+		}
+	}
+}
+
 var (
 	// FlagBuild is for building the vector database
 	FlagBuild = flag.Bool("build", false, "build the vector database")
@@ -222,29 +250,31 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
-		rng := rand.New(rand.NewSource(1))
-		splits := [64][256]byte{}
-		for i := range splits {
-			for j := range splits[i] {
-				splits[i][j] = byte(rng.Uint32())
-			}
-		}
+		avg, count := 0.0, 0.0
 		txts := make([]TXT, 0, 8)
 		for i, s := range data[:len(data)-1] {
 			m.Add(s)
 			txt := TXT{}
 			txt.Vector = m.Mix()
 			txt.Symbol = data[i+1]
-			for j := range splits {
-				txt.Index <<= 1
-				s := txt.CS(&splits[j])
-				if s > .5 {
-					txt.Index |= 1
-				}
+			for j := range Splits {
+				s := txt.CSFloat64(&Splits[j])
+				avg += s
+				count++
 			}
 			txts = append(txts, txt)
 		}
-
+		avg /= count
+		fmt.Println(avg)
+		for i := range txts {
+			for j := range Splits {
+				txts[i].Index <<= 1
+				s := txts[i].CSFloat64(&Splits[j])
+				if s > avg {
+					txts[i].Index |= 1
+				}
+			}
+		}
 		sort.Slice(txts, func(i, j int) bool {
 			return txts[i].Index < txts[j].Index
 		})
@@ -266,19 +296,59 @@ func main() {
 	for _, s := range input {
 		m.Add(s)
 	}
+	stat, err := vectors.Stat()
+	if err != nil {
+		panic(err)
+	}
+	length := stat.Size() / Line
 	txt, reader := TXT{}, NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
-		vector := m.Mix()
-		symbol, max := byte(0), -1.0
-		done := reader.Read(&txt)
-		for !done {
-			s := txt.CS(&vector)
-			if s > max {
-				max, symbol = s, txt.Symbol
+		var vector TXT
+		vector.Vector = m.Mix()
+		for j := range Splits {
+			vector.Index <<= 1
+			s := vector.CSFloat64(&Splits[j])
+			if s > Average {
+				vector.Index |= 1
 			}
-			done = reader.Read(&txt)
 		}
-		reader.Reset()
+		symbol, max := byte(0), -1.0
+		search := func(query uint64) {
+			index := sort.Search(int(length), func(i int) bool {
+				_, err := vectors.Seek(int64(i*Line), 0)
+				if err != nil {
+					panic(err)
+				}
+				txt := TXT{}
+				reader.Read(&txt)
+				return txt.Index >= query
+			})
+			reader.Reset()
+
+			_, err := vectors.Seek(int64(index*Line), 0)
+			if err != nil {
+				panic(err)
+			}
+			done := reader.Read(&txt)
+			last := txt.Index
+			for !done {
+				s := txt.CS(&vector.Vector)
+				if s > max {
+					max, symbol = s, txt.Symbol
+				}
+				done = reader.Read(&txt)
+				if last != txt.Index {
+					break
+				}
+				last = txt.Index
+			}
+			reader.Reset()
+		}
+		search(vector.Index)
+		for k := 0; k < 64; k++ {
+			query := vector.Index ^ (1 << k)
+			search(query)
+		}
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
 	}
