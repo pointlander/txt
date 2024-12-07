@@ -7,6 +7,7 @@ package main
 import (
 	"compress/bzip2"
 	"embed"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +16,14 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
+
+	"github.com/pointlander/gradient/tf64"
+
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
 const (
@@ -24,6 +33,24 @@ const (
 	Line = 256 + 1 + 8
 	// Average is the split average
 	Average = 0.12502159179100905
+)
+
+const (
+	// B1 exponential decay of the rate for the first moment estimates
+	B1 = 0.8
+	// B2 exponential decay rate for the second-moment estimates
+	B2 = 0.89
+	// Eta is the learning rate
+	Eta = 0.01
+)
+
+const (
+	// StateM is the state for the mean
+	StateM = iota
+	// StateV is the state for the variance
+	StateV
+	// StateTotal is the total number of states
+	StateTotal
 )
 
 //go:embed 10.txt.utf-8.bz2
@@ -210,15 +237,132 @@ func (t *TXT) CSFloat64(vector *[256]float64) float64 {
 }
 
 // Splits are the split vectors
-var Splits [64][256]float64
+// var Splits [64][256]float64
 
-func init() {
+/*func init() {
 	rng := rand.New(rand.NewSource(1))
 	for i := range Splits {
 		for j := range Splits[i] {
 			Splits[i][j] = rng.Float64()
 		}
 	}
+}*/
+
+// Pow returns the input raised to the current time
+func Pow(x float64, i int) float64 {
+	y := math.Pow(x, float64(i+1))
+	if math.IsNaN(y) || math.IsInf(y, 0) {
+		return 0
+	}
+	return y
+}
+
+// GenerateSplits generates the splitting vectors
+func GenerateSplits(txts []TXT) (splits [64][256]float64) {
+	rng := rand.New(rand.NewSource(1))
+	for s := range splits {
+		points := make(plotter.XYs, 0, 8)
+		set := tf64.NewSet()
+		set.Add("w1", 256, 1)
+
+		for i := range set.Weights {
+			w := set.Weights[i]
+			if strings.HasPrefix(w.N, "b") {
+				w.X = w.X[:cap(w.X)]
+				w.States = make([][]float64, StateTotal)
+				for i := range w.States {
+					w.States[i] = make([]float64, len(w.X))
+				}
+				continue
+			}
+			factor := math.Sqrt(float64(w.S[0]))
+			for i := 0; i < cap(w.X); i++ {
+				w.X = append(w.X, rng.NormFloat64()*factor)
+			}
+			w.States = make([][]float64, StateTotal)
+			for i := range w.States {
+				w.States[i] = make([]float64, len(w.X))
+			}
+		}
+
+		others := tf64.NewSet()
+		others.Add("input", 256, 1)
+		others.Add("output", 1, 1)
+
+		for i := range others.Weights {
+			w := others.Weights[i]
+			w.X = w.X[:cap(w.X)]
+		}
+		others.ByName["output"].X[0] = .5
+
+		l1 := tf64.Similarity(set.Get("w1"), others.Get("input"))
+		loss := tf64.Quadratic(l1, others.Get("output"))
+
+		for i := range txts {
+			others.Zero()
+			set.Zero()
+			input := others.ByName["input"].X
+			for j := range input {
+				input[j] = float64(txts[i].Vector[j])
+			}
+			cost := tf64.Gradient(loss).X[0]
+
+			norm := 0.0
+			for _, p := range set.Weights {
+				for _, d := range p.D {
+					norm += d * d
+				}
+			}
+			norm = math.Sqrt(norm)
+			b1, b2 := Pow(B1, i), Pow(B2, i)
+			scaling := 1.0
+			if norm > 1 {
+				scaling = 1 / norm
+			}
+			for _, w := range set.Weights {
+				for l, d := range w.D {
+					g := d * scaling
+					m := B1*w.States[StateM][l] + (1-B1)*g
+					v := B2*w.States[StateV][l] + (1-B2)*g*g
+					w.States[StateM][l] = m
+					w.States[StateV][l] = v
+					mhat := m / (1 - b1)
+					vhat := v / (1 - b2)
+					if vhat < 0 {
+						vhat = 0
+					}
+					w.X[l] -= Eta * mhat / (math.Sqrt(vhat) + 1e-8)
+				}
+			}
+			points = append(points, plotter.XY{X: float64(i), Y: float64(cost)})
+		}
+		fmt.Println(s)
+
+		w1 := set.ByName["w1"].X
+		for i := range w1 {
+			splits[s][i] = w1[i]
+		}
+
+		p := plot.New()
+
+		p.Title.Text = "epochs vs cost"
+		p.X.Label.Text = "epochs"
+		p.Y.Label.Text = "cost"
+
+		scatter, err := plotter.NewScatter(points)
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		p.Add(scatter)
+
+		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("epochs%d.png", s))
+		if err != nil {
+			panic(err)
+		}
+	}
+	return splits
 }
 
 var (
@@ -231,6 +375,16 @@ var (
 	// FlagCount number of symbols to generate
 	FlagCount = flag.Int("count", 33, "number of symbols to generate")
 )
+
+func float64ToByte(f float64) []byte {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], math.Float64bits(f))
+	return buf[:]
+}
+
+func byteToFloat64(buf []byte) float64 {
+	return math.Float64frombits(binary.BigEndian.Uint64(buf))
+}
 
 func main() {
 	flag.Parse()
@@ -252,27 +406,43 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
-		avg, count := 0.0, 0.0
+		//avg, count := 0.0, 0.0
 		txts := make([]TXT, 0, 8)
 		for i, s := range data[:len(data)-1] {
 			m.Add(s)
 			txt := TXT{}
 			txt.Vector = m.Mix()
 			txt.Symbol = data[i+1]
-			for j := range Splits {
+			/*for j := range Splits {
 				s := txt.CSFloat64(&Splits[j])
 				avg += s
 				count++
-			}
+			}*/
 			txts = append(txts, txt)
 		}
-		avg /= count
-		fmt.Println(avg)
+
+		splits := GenerateSplits(txts)
+		splitsFile, err := os.Create("splits.bin")
+		if err != nil {
+			panic(err)
+		}
+		defer splitsFile.Close()
+		for i := range splits {
+			for j := range splits[i] {
+				_, err := splitsFile.Write(float64ToByte(splits[i][j]))
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+
+		//avg /= count
+		//fmt.Println(avg)
 		for i := range txts {
-			for j := range Splits {
+			for j := range splits {
 				txts[i].Index <<= 1
-				s := txts[i].CSFloat64(&Splits[j])
-				if s > avg {
+				s := txts[i].CSFloat64(&splits[j])
+				if s > .5 {
 					txts[i].Index |= 1
 				}
 			}
@@ -289,6 +459,23 @@ func main() {
 	}
 
 	input := []byte(*FlagQuery)
+	splitsFile, err := os.Open("splits.bin")
+	if err != nil {
+		panic(err)
+	}
+	defer splitsFile.Close()
+	var splits [64][256]float64
+	buffer := make([]byte, 8)
+	for i := range splits {
+		for j := range splits[i] {
+			n, _ := splitsFile.Read(buffer)
+			if n != 8 {
+				panic("there should be 8 bytes")
+			}
+			splits[i][j] = byteToFloat64(buffer)
+		}
+	}
+
 	vectors, err := os.Open("vectors.bin")
 	if err != nil {
 		panic(err)
@@ -326,10 +513,10 @@ func main() {
 	for j := 0; j < *FlagCount; j++ {
 		var vector TXT
 		vector.Vector = m.Mix()
-		for j := range Splits {
+		for j := range splits {
 			vector.Index <<= 1
-			s := vector.CSFloat64(&Splits[j])
-			if s > Average {
+			s := vector.CSFloat64(&splits[j])
+			if s > .5 {
 				vector.Index |= 1
 			}
 		}
