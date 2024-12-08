@@ -32,7 +32,7 @@ const (
 	// Line is the size of a line
 	Line = 256 + 1 + 8
 	// Average is the split average
-	Average = 0.12502159179100905
+	Average = 0.32166421086241237
 )
 
 const (
@@ -293,9 +293,9 @@ func GenerateSplits(txts []TXT) (splits [64][256]float64) {
 			w := others.Weights[i]
 			w.X = w.X[:cap(w.X)]
 		}
-		others.ByName["output"].X[0] = .5
+		others.ByName["output"].X[0] = .33
 
-		l1 := tf64.Similarity(set.Get("w1"), others.Get("input"))
+		l1 := tf64.Similarity(tf64.Abs(set.Get("w1")), others.Get("input"))
 		loss := tf64.Quadratic(l1, others.Get("output"))
 
 		for i := range txts {
@@ -406,22 +406,22 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
-		//avg, count := 0.0, 0.0
+		avg, count := 0.0, 0.0
 		txts := make([]TXT, 0, 8)
 		for i, s := range data[:len(data)-1] {
 			m.Add(s)
 			txt := TXT{}
 			txt.Vector = m.Mix()
 			txt.Symbol = data[i+1]
-			/*for j := range Splits {
-				s := txt.CSFloat64(&Splits[j])
-				avg += s
-				count++
-			}*/
 			txts = append(txts, txt)
 		}
 
 		splits := GenerateSplits(txts)
+		for i := range splits {
+			for j := range splits[i] {
+				splits[i][j] = math.Abs(splits[i][j])
+			}
+		}
 		splitsFile, err := os.Create("splits.bin")
 		if err != nil {
 			panic(err)
@@ -436,13 +436,21 @@ func main() {
 			}
 		}
 
-		//avg /= count
-		//fmt.Println(avg)
+		for i := range txts {
+			for j := range splits {
+				s := txts[i].CSFloat64(&splits[j])
+				avg += s
+				count++
+			}
+		}
+		avg /= count
+		fmt.Println(avg)
+
 		for i := range txts {
 			for j := range splits {
 				txts[i].Index <<= 1
 				s := txts[i].CSFloat64(&splits[j])
-				if s > .5 {
+				if s > avg {
 					txts[i].Index |= 1
 				}
 			}
@@ -516,7 +524,7 @@ func main() {
 		for j := range splits {
 			vector.Index <<= 1
 			s := vector.CSFloat64(&splits[j])
-			if s > .5 {
+			if s > Average {
 				vector.Index |= 1
 			}
 		}
