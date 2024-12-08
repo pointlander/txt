@@ -31,10 +31,8 @@ const (
 	Size = 8
 	// Line is the size of a line
 	Line = 256 + 1 + 8
-	// Average is the split average
-	Average = 0.19164855058549146
 	// Target is the cosine similarity vector learning target
-	Target = .2
+	Target = .33
 )
 
 const (
@@ -448,19 +446,6 @@ func main() {
 				splits[i][j] = math.Abs(splits[i][j])
 			}
 		}
-		splitsFile, err := os.Create("splits.bin")
-		if err != nil {
-			panic(err)
-		}
-		defer splitsFile.Close()
-		for i := range splits {
-			for j := range splits[i] {
-				_, err := splitsFile.Write(float64ToByte(splits[i][j]))
-				if err != nil {
-					panic(err)
-				}
-			}
-		}
 
 		for i := range txts {
 			for j := range splits {
@@ -471,6 +456,24 @@ func main() {
 		}
 		avg /= count
 		fmt.Println(avg)
+
+		splitsFile, err := os.Create("splits.bin")
+		if err != nil {
+			panic(err)
+		}
+		defer splitsFile.Close()
+		_, err = splitsFile.Write(float64ToByte(avg))
+		if err != nil {
+			panic(err)
+		}
+		for i := range splits {
+			for j := range splits[i] {
+				_, err := splitsFile.Write(float64ToByte(splits[i][j]))
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
 
 		for i := range txts {
 			for j := range splits {
@@ -500,6 +503,11 @@ func main() {
 	defer splitsFile.Close()
 	var splits [64][256]float64
 	buffer := make([]byte, 8)
+	n, _ := splitsFile.Read(buffer)
+	if n != 8 {
+		panic("there should be 8 bytes")
+	}
+	avg := byteToFloat64(buffer)
 	for i := range splits {
 		for j := range splits[i] {
 			n, _ := splitsFile.Read(buffer)
@@ -549,7 +557,7 @@ func main() {
 		for j := range splits {
 			index <<= 1
 			s := CSFloat64(&vector, &splits[j])
-			if s > Average {
+			if s > avg {
 				index |= 1
 			}
 		}
