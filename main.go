@@ -32,7 +32,9 @@ const (
 	// Line is the size of a line
 	Line = 256 + 1 + 8
 	// Average is the split average
-	Average = 0.32957396832954744
+	Average = 0.19164855058549146
+	// Target is the cosine similarity vector learning target
+	Target = .2
 )
 
 const (
@@ -317,7 +319,7 @@ func GenerateSplits(txts []TXT) (splits [64][256]float64) {
 			w := others.Weights[i]
 			w.X = w.X[:cap(w.X)]
 		}
-		others.ByName["output"].X[0] = .33
+		others.ByName["output"].X[0] = Target
 
 		l1 := tf64.Similarity(tf64.Abs(set.Get("w1")), others.Get("input"))
 		loss := tf64.Quadratic(l1, others.Get("output"))
