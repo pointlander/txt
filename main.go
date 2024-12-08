@@ -32,7 +32,7 @@ const (
 	// Line is the size of a line
 	Line = 256 + 1 + 8
 	// Average is the split average
-	Average = 0.32166421086241237
+	Average = 0.32957396832954744
 )
 
 const (
@@ -123,7 +123,31 @@ func (m Mixer) Mix() [256]byte {
 		sum += v
 	}
 	for i := range mix {
-		mix[i] = byte(128 * y.Data[i] / sum)
+		mix[i] = byte(255 * y.Data[i] / sum)
+	}
+	return mix
+}
+
+// MixFloat64 mixes the histograms outputting float64
+func (m Mixer) MixFloat64() [256]float64 {
+	mix := [256]float64{}
+	x := NewMatrix(256, Size)
+	for i := range m.Histograms {
+		sum := 0.0
+		for _, v := range m.Histograms[i].Vector {
+			sum += float64(v)
+		}
+		for _, v := range m.Histograms[i].Vector {
+			x.Data = append(x.Data, float64(v)/sum)
+		}
+	}
+	y := SelfAttention(x, x, x).Sum()
+	sum := 0.0
+	for _, v := range y.Data {
+		sum += v
+	}
+	for i := range mix {
+		mix[i] = y.Data[i] / sum
 	}
 	return mix
 }
@@ -224,7 +248,7 @@ func (t *TXT) CS(vector *[256]byte) float64 {
 	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
-// CS is float64 cosine similarity
+// CSFloat64 is float64 cosine similarity
 func (t *TXT) CSFloat64(vector *[256]float64) float64 {
 	aa, bb, ab := 0.0, 0.0, 0.0
 	for i := range vector {
@@ -236,17 +260,17 @@ func (t *TXT) CSFloat64(vector *[256]float64) float64 {
 	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
-// Splits are the split vectors
-// var Splits [64][256]float64
-
-/*func init() {
-	rng := rand.New(rand.NewSource(1))
-	for i := range Splits {
-		for j := range Splits[i] {
-			Splits[i][j] = rng.Float64()
-		}
+// CSFloat64 is float64 cosine similarity
+func CSFloat64(t *[256]float64, vector *[256]float64) float64 {
+	aa, bb, ab := 0.0, 0.0, 0.0
+	for i := range vector {
+		a, b := vector[i], float64(t[i])
+		aa += a * a
+		bb += b * b
+		ab += a * b
 	}
-}*/
+	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
+}
 
 // Pow returns the input raised to the current time
 func Pow(x float64, i int) float64 {
@@ -496,11 +520,11 @@ func main() {
 	if *FlagBrute {
 		txt, reader := TXT{}, NewTXTReader(vectors)
 		for j := 0; j < *FlagCount; j++ {
-			vector := m.Mix()
+			vector := m.MixFloat64()
 			symbol, max := byte(0), -1.0
 			done := reader.Read(&txt)
 			for !done {
-				s := txt.CS(&vector)
+				s := txt.CSFloat64(&vector)
 				if s > max {
 					max, symbol = s, txt.Symbol
 				}
@@ -519,13 +543,12 @@ func main() {
 	length := stat.Size() / Line
 	txt, reader := TXT{}, NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
-		var vector TXT
-		vector.Vector = m.Mix()
+		vector, index := m.MixFloat64(), uint64(0)
 		for j := range splits {
-			vector.Index <<= 1
-			s := vector.CSFloat64(&splits[j])
+			index <<= 1
+			s := CSFloat64(&vector, &splits[j])
 			if s > Average {
-				vector.Index |= 1
+				index |= 1
 			}
 		}
 		symbol, max := byte(0), -1.0
@@ -548,7 +571,7 @@ func main() {
 			done := reader.Read(&txt)
 			last := txt.Index
 			for !done {
-				s := txt.CS(&vector.Vector)
+				s := txt.CSFloat64(&vector)
 				if s > max {
 					max, symbol = s, txt.Symbol
 				}
@@ -560,9 +583,9 @@ func main() {
 			}
 			reader.Reset()
 		}
-		search(vector.Index)
+		search(index)
 		for k := 0; k < 64; k++ {
-			query := vector.Index ^ (1 << k)
+			query := index ^ (1 << k)
 			search(query)
 		}
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
