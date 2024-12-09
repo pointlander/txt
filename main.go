@@ -400,6 +400,12 @@ var (
 	FlagCount = flag.Int("count", 33, "number of symbols to generate")
 )
 
+// Pair is a pair of values
+type Pair struct {
+	I uint64
+	C float64
+}
+
 func float64ToByte(f float64) []byte {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], math.Float64bits(f))
@@ -454,6 +460,36 @@ func main() {
 				count++
 			}
 		}
+
+		for j := range splits[:8] {
+			split := make([]Pair, len(txts))
+			for i := range txts {
+				s := txts[i].CSFloat64(&splits[j])
+				split[i].C = s
+				split[i].I = uint64(i)
+				avg += s
+				count++
+			}
+			sort.Slice(split, func(i, j int) bool {
+				return split[i].C < split[j].C
+			})
+			out, err := os.Create(fmt.Sprintf("index%d.bin", j))
+			if err != nil {
+				panic(err)
+			}
+			index := make([]byte, 8)
+			for _, s := range split {
+				for i := 0; i < 8; i++ {
+					index[i] = byte(s.I >> ((7 - i) * 8))
+				}
+				_, err = out.Write(index)
+				if err != nil {
+					panic(err)
+				}
+			}
+			out.Close()
+		}
+
 		avg /= count
 		fmt.Println(avg)
 
@@ -484,9 +520,9 @@ func main() {
 				}
 			}
 		}
-		sort.Slice(txts, func(i, j int) bool {
+		/*sort.Slice(txts, func(i, j int) bool {
 			return txts[i].Index < txts[j].Index
-		})
+		})*/
 
 		writer := NewTXTWriter(db)
 		for _, txt := range txts {
