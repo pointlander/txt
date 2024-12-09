@@ -32,7 +32,9 @@ const (
 	// Line is the size of a line
 	Line = 256 + 1 + 8
 	// Target is the cosine similarity vector learning target
-	Target = .33
+	Target = 1.0
+	// Vectors is the number of vectors
+	Vectors = 8
 )
 
 const (
@@ -282,7 +284,7 @@ func Pow(x float64, i int) float64 {
 }
 
 // GenerateSplits generates the splitting vectors
-func GenerateSplits(txts []TXT) (splits [64][256]float64) {
+func GenerateSplits(txts []TXT) (splits [Vectors][256]float64) {
 	rng := rand.New(rand.NewSource(1))
 	for s := range splits {
 		points := make(plotter.XYs, 0, 8)
@@ -537,7 +539,7 @@ func main() {
 		panic(err)
 	}
 	defer splitsFile.Close()
-	var splits [64][256]float64
+	var splits [Vectors][256]float64
 	buffer := make([]byte, 8)
 	n, _ := splitsFile.Read(buffer)
 	if n != 8 {
@@ -629,7 +631,7 @@ func main() {
 				return txt.CSFloat64(&splits[k]) >= query
 			})
 
-			for offset := -16; offset < 16; offset++ {
+			for offset := -2048; offset < 2048; offset++ {
 				index := index + offset
 				if index < 0 {
 					index = 0
