@@ -553,7 +553,7 @@ func main() {
 			splits[i][j] = byteToFloat64(buffer)
 		}
 	}
-
+	_ = avg
 	vectors, err := os.Open("vectors.bin")
 	if err != nil {
 		panic(err)
@@ -587,10 +587,81 @@ func main() {
 		panic(err)
 	}
 	length := stat.Size() / Line
-	txt, reader := TXT{}, NewTXTReader(vectors)
+	var indexes [8]*os.File
+	for i := range indexes {
+		var err error
+		indexes[i], err = os.Open(fmt.Sprintf("index%d.bin", i))
+		if err != nil {
+			panic(err)
+		}
+	}
+	defer func() {
+		for i := range indexes {
+			indexes[i].Close()
+		}
+	}()
+	reader := NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
-		vector, index := m.MixFloat64(), uint64(0)
-		for j := range splits {
+		vector := m.MixFloat64()
+		symbol, max := byte(0), -1.0
+		for k := range indexes {
+			query := CSFloat64(&vector, &splits[k])
+			index := sort.Search(int(length), func(i int) bool {
+				_, err := indexes[k].Seek(int64(i*8), 0)
+				if err != nil {
+					panic(err)
+				}
+				buffer, vec := make([]byte, 8), uint64(0)
+				n, _ := indexes[k].Read(buffer)
+				if n != 8 {
+					panic("there should be 8 byte")
+				}
+				for i := 0; i < 8; i++ {
+					vec <<= 8
+					vec |= uint64(buffer[i])
+				}
+				_, err = vectors.Seek(int64(vec*Line), 0)
+				if err != nil {
+					panic(err)
+				}
+				txt := TXT{}
+				reader.Read(&txt)
+				return txt.CSFloat64(&splits[k]) >= query
+			})
+
+			for offset := -16; offset < 16; offset++ {
+				index := index + offset
+				if index < 0 {
+					index = 0
+				} else if index >= int(length) {
+					index = int(length) - 1
+				}
+				_, err := indexes[k].Seek(int64(index*8), 0)
+				if err != nil {
+					panic(err)
+				}
+				buffer, vec := make([]byte, 8), uint64(0)
+				n, _ := indexes[k].Read(buffer)
+				if n != 8 {
+					panic("there should be 8 byte")
+				}
+				for i := 0; i < 8; i++ {
+					vec <<= 8
+					vec |= uint64(buffer[i])
+				}
+				_, err = vectors.Seek(int64(vec*Line), 0)
+				if err != nil {
+					panic(err)
+				}
+				txt := TXT{}
+				reader.Read(&txt)
+				s := txt.CSFloat64(&vector)
+				if s > max {
+					max, symbol = s, txt.Symbol
+				}
+			}
+		}
+		/*for j := range splits {
 			index <<= 1
 			s := CSFloat64(&vector, &splits[j])
 			if s > avg {
@@ -633,7 +704,7 @@ func main() {
 		for k := 0; k < 64; k++ {
 			query := index ^ (1 << k)
 			search(query)
-		}
+		}*/
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
 	}
