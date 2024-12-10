@@ -323,15 +323,16 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
-		txts := make([]TXT, 0, 8)
-		for i, s := range data[:len(data)-1] {
+		length := len(data) - 1
+		input, txts := data[:length], make([]TXT, length)
+		for i, s := range input {
 			m.Add(s)
 			txt := TXT{}
 			txt.Vector = m.Mix()
 			txt.Markov = m.Markov
 			txt.Symbol = data[i+1]
 			txt.Index = uint64(i)
-			txts = append(txts, txt)
+			txts[i] = txt
 		}
 
 		sort.Slice(txts, func(i, j int) bool {
