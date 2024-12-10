@@ -34,7 +34,7 @@ const (
 	// Target is the cosine similarity vector learning target
 	Target = 1.0
 	// Vectors is the number of vectors
-	Vectors = 8
+	Vectors = 64
 )
 
 const (
@@ -463,7 +463,7 @@ func main() {
 			}
 		}
 
-		for j := range splits[:8] {
+		for j := range splits {
 			split := make([]Pair, len(txts))
 			for i := range txts {
 				s := txts[i].CSFloat64(&splits[j])
@@ -589,7 +589,7 @@ func main() {
 		panic(err)
 	}
 	length := stat.Size() / Line
-	var indexes [8]*os.File
+	var indexes [Vectors]*os.File
 	for i := range indexes {
 		var err error
 		indexes[i], err = os.Open(fmt.Sprintf("index%d.bin", i))
