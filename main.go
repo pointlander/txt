@@ -12,27 +12,16 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"sort"
 	"strconv"
-	"strings"
-
-	"github.com/pointlander/gradient/tf64"
-
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
-	"gonum.org/v1/plot/vg/draw"
 )
 
 const (
 	// Size is the number of histograms
 	Size = 8
 	// Line is the size of a line
-	Line = 256 + 1 + 8
-	// Target is the cosine similarity vector learning target
-	Target = .33
+	Line = 256 + 2 + 1 + 8
 )
 
 const (
@@ -55,6 +44,9 @@ const (
 
 //go:embed 10.txt.utf-8.bz2
 var Iris embed.FS
+
+// Markov is a markov model
+type Markov [2]byte
 
 // Histogram is a buffered histogram
 type Histogram struct {
@@ -85,6 +77,7 @@ func (h *Histogram) Add(s byte) {
 
 // Mixer mixes several histograms together
 type Mixer struct {
+	Markov     Markov
 	Histograms []Histogram
 }
 
@@ -153,17 +146,20 @@ func (m Mixer) MixFloat64() [256]float64 {
 }
 
 // Add adds a symbol to a mixer
-func (m Mixer) Add(s byte) {
+func (m *Mixer) Add(s byte) {
 	for i := range m.Histograms {
 		m.Histograms[i].Add(s)
 	}
+	m.Markov[1] = m.Markov[0]
+	m.Markov[0] = s
 }
 
 // TXT is a context
 type TXT struct {
-	Index  uint64
 	Vector [256]byte
+	Markov Markov
 	Symbol byte
+	Index  uint64
 }
 
 // TXTWriter is a txt file writer
@@ -181,6 +177,10 @@ func NewTXTWriter(file *os.File) TXTWriter {
 // Write writes a txt record to the file
 func (t *TXTWriter) Write(txt *TXT) {
 	_, err := t.File.Write(txt.Vector[:])
+	if err != nil {
+		panic(err)
+	}
+	_, err = t.File.Write(txt.Markov[:])
 	if err != nil {
 		panic(err)
 	}
@@ -218,11 +218,12 @@ func (t *TXTReader) Read(txt *TXT) bool {
 		return true
 	}
 	copy(txt.Vector[:], buffer[:256])
-	txt.Symbol = buffer[256]
+	copy(txt.Markov[:], buffer[256:258])
+	txt.Symbol = buffer[258]
 	index := uint64(0)
 	for i := 0; i < 8; i++ {
 		index <<= 8
-		index |= uint64(buffer[257+i])
+		index |= uint64(buffer[259+i])
 	}
 	txt.Index = index
 	return false
@@ -281,114 +282,6 @@ func Pow(x float64, i int) float64 {
 	return y
 }
 
-// GenerateSplits generates the splitting vectors
-func GenerateSplits(txts []TXT) (splits [64][256]float64) {
-	rng := rand.New(rand.NewSource(1))
-	for s := range splits {
-		points := make(plotter.XYs, 0, 8)
-		set := tf64.NewSet()
-		set.Add("w1", 256, 1)
-
-		for i := range set.Weights {
-			w := set.Weights[i]
-			if strings.HasPrefix(w.N, "b") {
-				w.X = w.X[:cap(w.X)]
-				w.States = make([][]float64, StateTotal)
-				for i := range w.States {
-					w.States[i] = make([]float64, len(w.X))
-				}
-				continue
-			}
-			factor := math.Sqrt(float64(w.S[0]))
-			for i := 0; i < cap(w.X); i++ {
-				w.X = append(w.X, rng.NormFloat64()*factor)
-			}
-			w.States = make([][]float64, StateTotal)
-			for i := range w.States {
-				w.States[i] = make([]float64, len(w.X))
-			}
-		}
-
-		others := tf64.NewSet()
-		others.Add("input", 256, 1)
-		others.Add("output", 1, 1)
-
-		for i := range others.Weights {
-			w := others.Weights[i]
-			w.X = w.X[:cap(w.X)]
-		}
-		others.ByName["output"].X[0] = Target
-
-		l1 := tf64.Similarity(tf64.Abs(set.Get("w1")), others.Get("input"))
-		loss := tf64.Quadratic(l1, others.Get("output"))
-
-		for i := range txts {
-			others.Zero()
-			set.Zero()
-			input := others.ByName["input"].X
-			for j := range input {
-				input[j] = float64(txts[i].Vector[j])
-			}
-			cost := tf64.Gradient(loss).X[0]
-
-			norm := 0.0
-			for _, p := range set.Weights {
-				for _, d := range p.D {
-					norm += d * d
-				}
-			}
-			norm = math.Sqrt(norm)
-			b1, b2 := Pow(B1, i), Pow(B2, i)
-			scaling := 1.0
-			if norm > 1 {
-				scaling = 1 / norm
-			}
-			for _, w := range set.Weights {
-				for l, d := range w.D {
-					g := d * scaling
-					m := B1*w.States[StateM][l] + (1-B1)*g
-					v := B2*w.States[StateV][l] + (1-B2)*g*g
-					w.States[StateM][l] = m
-					w.States[StateV][l] = v
-					mhat := m / (1 - b1)
-					vhat := v / (1 - b2)
-					if vhat < 0 {
-						vhat = 0
-					}
-					w.X[l] -= Eta * mhat / (math.Sqrt(vhat) + 1e-8)
-				}
-			}
-			points = append(points, plotter.XY{X: float64(i), Y: float64(cost)})
-		}
-		fmt.Println(s)
-
-		w1 := set.ByName["w1"].X
-		for i := range w1 {
-			splits[s][i] = w1[i]
-		}
-
-		p := plot.New()
-
-		p.Title.Text = "epochs vs cost"
-		p.X.Label.Text = "epochs"
-		p.Y.Label.Text = "cost"
-
-		scatter, err := plotter.NewScatter(points)
-		if err != nil {
-			panic(err)
-		}
-		scatter.GlyphStyle.Radius = vg.Length(1)
-		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
-		p.Add(scatter)
-
-		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("epochs%d.png", s))
-		if err != nil {
-			panic(err)
-		}
-	}
-	return splits
-}
-
 var (
 	// FlagBuild is for building the vector database
 	FlagBuild = flag.Bool("build", false, "build the vector database")
@@ -430,62 +323,24 @@ func main() {
 		}
 		defer db.Close()
 		m := NewMixer()
-		avg, count := 0.0, 0.0
 		txts := make([]TXT, 0, 8)
 		for i, s := range data[:len(data)-1] {
 			m.Add(s)
 			txt := TXT{}
 			txt.Vector = m.Mix()
+			txt.Markov = m.Markov
 			txt.Symbol = data[i+1]
+			txt.Index = uint64(i)
 			txts = append(txts, txt)
 		}
 
-		splits := GenerateSplits(txts)
-		for i := range splits {
-			for j := range splits[i] {
-				splits[i][j] = math.Abs(splits[i][j])
-			}
-		}
-
-		for i := range txts {
-			for j := range splits {
-				s := txts[i].CSFloat64(&splits[j])
-				avg += s
-				count++
-			}
-		}
-		avg /= count
-		fmt.Println(avg)
-
-		splitsFile, err := os.Create("splits.bin")
-		if err != nil {
-			panic(err)
-		}
-		defer splitsFile.Close()
-		_, err = splitsFile.Write(float64ToByte(avg))
-		if err != nil {
-			panic(err)
-		}
-		for i := range splits {
-			for j := range splits[i] {
-				_, err := splitsFile.Write(float64ToByte(splits[i][j]))
-				if err != nil {
-					panic(err)
-				}
-			}
-		}
-
-		for i := range txts {
-			for j := range splits {
-				txts[i].Index <<= 1
-				s := txts[i].CSFloat64(&splits[j])
-				if s > avg {
-					txts[i].Index |= 1
-				}
-			}
-		}
 		sort.Slice(txts, func(i, j int) bool {
-			return txts[i].Index < txts[j].Index
+			if txts[i].Markov[0] < txts[j].Markov[0] {
+				return true
+			} else if txts[i].Markov[0] == txts[j].Markov[0] {
+				return txts[i].Markov[1] < txts[j].Markov[1]
+			}
+			return false
 		})
 
 		writer := NewTXTWriter(db)
@@ -496,27 +351,6 @@ func main() {
 	}
 
 	input := []byte(*FlagQuery)
-	splitsFile, err := os.Open("splits.bin")
-	if err != nil {
-		panic(err)
-	}
-	defer splitsFile.Close()
-	var splits [64][256]float64
-	buffer := make([]byte, 8)
-	n, _ := splitsFile.Read(buffer)
-	if n != 8 {
-		panic("there should be 8 bytes")
-	}
-	avg := byteToFloat64(buffer)
-	for i := range splits {
-		for j := range splits[i] {
-			n, _ := splitsFile.Read(buffer)
-			if n != 8 {
-				panic("there should be 8 bytes")
-			}
-			splits[i][j] = byteToFloat64(buffer)
-		}
-	}
 
 	vectors, err := os.Open("vectors.bin")
 	if err != nil {
@@ -553,50 +387,38 @@ func main() {
 	length := stat.Size() / Line
 	txt, reader := TXT{}, NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
-		vector, index := m.MixFloat64(), uint64(0)
-		for j := range splits {
-			index <<= 1
-			s := CSFloat64(&vector, &splits[j])
-			if s > avg {
-				index |= 1
+		index := sort.Search(int(length), func(i int) bool {
+			_, err := vectors.Seek(int64(i*Line), 0)
+			if err != nil {
+				panic(err)
 			}
-		}
+			txt := TXT{}
+			reader.Read(&txt)
+			if txt.Markov[0] > m.Markov[0] {
+				return true
+			} else if txt.Markov[0] == m.Markov[0] {
+				return txt.Markov[1] >= m.Markov[1]
+			}
+			return false
+		})
 		symbol, max := byte(0), -1.0
-		search := func(query uint64) {
-			index := sort.Search(int(length), func(i int) bool {
-				_, err := vectors.Seek(int64(i*Line), 0)
-				if err != nil {
-					panic(err)
-				}
-				txt := TXT{}
-				reader.Read(&txt)
-				return txt.Index >= query
-			})
-			reader.Reset()
-
+		vector := m.MixFloat64()
+		for k := -32; k < 32; k++ {
+			index := index + k
+			if index < 0 {
+				continue
+			} else if index >= int(length) {
+				continue
+			}
 			_, err := vectors.Seek(int64(index*Line), 0)
 			if err != nil {
 				panic(err)
 			}
-			done := reader.Read(&txt)
-			last := txt.Index
-			for !done {
-				s := txt.CSFloat64(&vector)
-				if s > max {
-					max, symbol = s, txt.Symbol
-				}
-				done = reader.Read(&txt)
-				if last != txt.Index {
-					break
-				}
-				last = txt.Index
+			reader.Read(&txt)
+			s := txt.CSFloat64(&vector)
+			if s > max {
+				max, symbol = s, txt.Symbol
 			}
-			reader.Reset()
-		}
-		search(index)
-		for k := 0; k < 64; k++ {
-			query := index ^ (1 << k)
-			search(query)
 		}
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
