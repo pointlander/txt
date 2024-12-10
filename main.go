@@ -403,7 +403,7 @@ func main() {
 		})
 		symbol, max := byte(0), -1.0
 		vector := m.MixFloat64()
-		for k := -1024; k < 1024; k++ {
+		for k := 0; k < 2048; k++ {
 			index := index + k
 			if index < 0 {
 				continue
