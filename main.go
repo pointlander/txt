@@ -347,7 +347,7 @@ func main() {
 			return false
 		})
 
-		const Block = 1024
+		const Block = 8 * 1024
 		last, index := txts[0].Markov, 0
 		for i := range txts {
 			if last == txts[i].Markov {
