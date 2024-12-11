@@ -15,6 +15,8 @@ import (
 	"os"
 	"sort"
 	"strconv"
+
+	"github.com/alixaxel/pagerank"
 )
 
 const (
@@ -160,6 +162,7 @@ type TXT struct {
 	Markov Markov
 	Symbol byte
 	Index  uint64
+	Rank   float64
 }
 
 // TXTWriter is a txt file writer
@@ -344,6 +347,54 @@ func main() {
 			return false
 		})
 
+		const Block = 1024
+		last, index := txts[0].Markov, 0
+		for i := range txts {
+			if last == txts[i].Markov {
+				continue
+			}
+
+			diff := i - index
+			blocks, spares := diff/Block, diff%Block
+			for j := 0; j < blocks; j++ {
+				graph := pagerank.NewGraph()
+				for k := 0; k < Block; k++ {
+					for l := 0; l < Block; l++ {
+						graph.Link(uint32(k), uint32(l), txts[index+j*Block+k].CS(&txts[index+j*Block+l].Vector))
+					}
+				}
+				graph.Rank(0.8, 1e-6, func(node uint32, rank float64) {
+					txts[index+j*Block+int(node)].Rank = rank
+				})
+			}
+			{
+				graph := pagerank.NewGraph()
+				for k := 0; k < spares; k++ {
+					for l := 0; l < spares; l++ {
+						graph.Link(uint32(k), uint32(l), txts[index+blocks*Block+k].CS(&txts[index+blocks*Block+l].Vector))
+					}
+				}
+				graph.Rank(0.8, 1e-6, func(node uint32, rank float64) {
+					txts[index+blocks*Block+int(node)].Rank = rank
+				})
+			}
+
+			last, index = txts[i].Markov, i
+		}
+
+		sort.Slice(txts, func(i, j int) bool {
+			if txts[i].Markov[0] < txts[j].Markov[0] {
+				return true
+			} else if txts[i].Markov[0] == txts[j].Markov[0] {
+				if txts[i].Markov[1] < txts[j].Markov[1] {
+					return true
+				} else if txts[i].Markov[1] == txts[j].Markov[1] {
+					return txts[i].Rank > txts[j].Rank
+				}
+			}
+			return false
+		})
+
 		writer := NewTXTWriter(db)
 		for _, txt := range txts {
 			writer.Write(&txt)
@@ -386,6 +437,7 @@ func main() {
 		panic(err)
 	}
 	length := stat.Size() / Line
+	symbols := make([]byte, 0, 8)
 	txt, reader := TXT{}, NewTXTReader(vectors)
 	for j := 0; j < *FlagCount; j++ {
 		index := sort.Search(int(length), func(i int) bool {
@@ -423,5 +475,7 @@ func main() {
 		}
 		fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 		m.Add(symbol)
+		symbols = append(symbols, symbol)
 	}
+	fmt.Println(string(symbols))
 }
