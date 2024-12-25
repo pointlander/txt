@@ -70,7 +70,8 @@ func Learn(txts []TXT) Neural {
 	loss := tf64.Quadratic(l2, others.Get("output"))
 
 	points := make(plotter.XYs, 0, 8)
-	for i := 0; i < 33*1024; i++ {
+	fmt.Println("learning:", len(txts))
+	for i := 0; i < len(txts); i++ {
 		pow := func(x float64) float64 {
 			y := math.Pow(x, float64(i+1))
 			if math.IsNaN(y) || math.IsInf(y, 0) {

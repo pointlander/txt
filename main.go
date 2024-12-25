@@ -288,6 +288,8 @@ func Pow(x float64, i int) float64 {
 var (
 	// FlagBuild is for building the vector database
 	FlagBuild = flag.Bool("build", false, "build the vector database")
+	// FlagNeural is the neural building mode
+	FlagNeural = flag.Bool("neural", false, "neural building mode")
 	// FlagQuery is for doing a lookup in the database
 	FlagQuery = flag.String("query", "In the beginning God created the heaven and the eart", "query for vector database")
 	// FlagBrute brute force mode
@@ -309,7 +311,7 @@ func byteToFloat64(buf []byte) float64 {
 func main() {
 	flag.Parse()
 
-	if *FlagBuild {
+	if *FlagBuild || *FlagNeural {
 		file, err := Iris.Open("10.txt.utf-8.bz2")
 		if err != nil {
 			panic(err)
@@ -336,6 +338,11 @@ func main() {
 			txt.Symbol = data[i+1]
 			txt.Index = uint64(i)
 			txts[i] = txt
+		}
+
+		if *FlagNeural {
+			Learn(txts)
+			return
 		}
 
 		sort.Slice(txts, func(i, j int) bool {
