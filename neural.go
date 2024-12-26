@@ -31,9 +31,9 @@ type Neural struct {
 func Learn(txts []TXT) Neural {
 	rng := rand.New(rand.NewSource(1))
 	set := tf64.NewSet()
-	set.Add("w1", 256, 256)
-	set.Add("b1", 256)
-	set.Add("w2", 256, 256)
+	set.Add("w1", 256, 1024)
+	set.Add("b1", 1024)
+	set.Add("w2", 1024, 256)
 	set.Add("b2", 256)
 
 	for i := range set.Weights {
@@ -69,6 +69,7 @@ func Learn(txts []TXT) Neural {
 	l2 := tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2"))
 	loss := tf64.Quadratic(l2, others.Get("output"))
 
+	last := 0.0
 	points := make(plotter.XYs, 0, 8)
 	fmt.Println("learning:", len(txts))
 	for i := 0; i < len(txts); i++ {
@@ -98,6 +99,7 @@ func Learn(txts []TXT) Neural {
 
 		set.Zero()
 		cost := tf64.Gradient(loss).X[0]
+		last = cost
 
 		norm := 0.0
 		for _, p := range set.Weights {
@@ -130,6 +132,11 @@ func Learn(txts []TXT) Neural {
 		if i%1024 == 0 {
 			fmt.Println(cost)
 		}
+	}
+
+	err := set.Save("set.db", last, len(txts))
+	if err != nil {
+		panic(err)
 	}
 
 	p := plot.New()
