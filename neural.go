@@ -27,6 +27,37 @@ type Neural struct {
 	Loss   tf64.Meta
 }
 
+// Load loads a neural network from a file
+func Load() Neural {
+	set := tf64.NewSet()
+	cost, epochs, err := set.Open("set.db")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(cost, epochs)
+
+	others := tf64.NewSet()
+	others.Add("input", 256)
+	others.Add("output", 256)
+
+	for i := range others.Weights {
+		w := others.Weights[i]
+		w.X = w.X[:cap(w.X)]
+	}
+
+	l1 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
+	l2 := tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2"))
+	loss := tf64.Quadratic(l2, others.Get("output"))
+
+	return Neural{
+		Set:    set,
+		Others: others,
+		L1:     l1,
+		L2:     l2,
+		Loss:   loss,
+	}
+}
+
 // Learn learn a neural network
 func Learn(txts []TXT) Neural {
 	rng := rand.New(rand.NewSource(1))

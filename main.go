@@ -294,6 +294,8 @@ var (
 	FlagQuery = flag.String("query", "In the beginning God created the heaven and the eart", "query for vector database")
 	// FlagBrute brute force mode
 	FlagBrute = flag.Bool("brute", false, "brute force mode")
+	// FlagNet is neural network inference mode
+	FlagNet = flag.Bool("net", false, "neural network mode")
 	// FlagCount number of symbols to generate
 	FlagCount = flag.Int("count", 33, "number of symbols to generate")
 )
@@ -419,6 +421,16 @@ func main() {
 	m := NewMixer()
 	for _, s := range input {
 		m.Add(s)
+	}
+	if *FlagNet {
+		neural := Load()
+		for j := 0; j < *FlagCount; j++ {
+			vector := m.MixFloat64()
+			symbol := byte(neural.Inference(vector))
+			fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
+			m.Add(symbol)
+		}
+		return
 	}
 	if *FlagBrute {
 		txt, reader := TXT{}, NewTXTReader(vectors)
