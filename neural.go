@@ -215,3 +215,17 @@ func (n *Neural) Inference(input [256]float64) int {
 
 	return symbol
 }
+
+// Distribution performs inference of the neural network
+func (n *Neural) Distribution(input [256]float64) (d []float64) {
+	in := n.Others.ByName["input"].X
+	for i := range in {
+		in[i] = input[i]
+	}
+	n.L2(func(a *tf64.V) bool {
+		d = a.X
+		return true
+	})
+
+	return d
+}

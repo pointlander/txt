@@ -435,12 +435,24 @@ func main() {
 	}
 	if *FlagNet {
 		neural := Load()
-		for j := 0; j < *FlagCount; j++ {
+		solution := make([]byte, 0, 8)
+		for i := 0; i < 33; i++ {
 			vector := m.MixFloat64()
-			symbol := byte(neural.Inference(vector))
+			histogram := neural.Distribution(vector)
+			symbol, max := byte(0), 0.0
+			for i, v := range histogram {
+				if v > 1.0/256.0 {
+					x := Max(&neural, 0, byte(i), &m)
+					if x > max {
+						symbol, max = byte(i), x
+					}
+				}
+			}
+			solution = append(solution, symbol)
 			fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 			m.Add(symbol)
 		}
+		fmt.Println(string(solution))
 		return
 	}
 	if *FlagBrute {
