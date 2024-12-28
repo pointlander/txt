@@ -99,6 +99,17 @@ func NewMixer() Mixer {
 	}
 }
 
+func (m Mixer) Copy() Mixer {
+	histograms := make([]Histogram, Size)
+	for i := range m.Histograms {
+		histograms[i] = m.Histograms[i]
+	}
+	return Mixer{
+		Markov:     m.Markov,
+		Histograms: histograms,
+	}
+}
+
 // Mix mixes the histograms
 func (m Mixer) Mix() [256]byte {
 	mix := [256]byte{}
