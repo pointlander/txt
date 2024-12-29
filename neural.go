@@ -46,7 +46,7 @@ func Load() Neural {
 	}
 
 	l1 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
-	l2 := tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2"))
+	l2 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2")))
 	loss := tf64.Quadratic(l2, others.Get("output"))
 
 	return Neural{
@@ -97,7 +97,7 @@ func Learn(txts []TXT) Neural {
 	}
 
 	l1 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
-	l2 := tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2"))
+	l2 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2")))
 	loss := tf64.Quadratic(l2, others.Get("output"))
 
 	last := 0.0
@@ -124,7 +124,7 @@ func Learn(txts []TXT) Neural {
 		}
 		output := others.ByName["output"].X
 		for j := range output {
-			output[j] = 0
+			output[j] = .1
 		}
 		output[txts[index].Symbol] = 1
 

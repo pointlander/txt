@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"sort"
 	"strconv"
@@ -434,9 +435,10 @@ func main() {
 		m.Add(s)
 	}
 	if *FlagNet {
+		rng := rand.New(rand.NewSource(1))
 		neural := Load()
 		solution := make([]byte, 0, 8)
-		for i := 0; i < 33; i++ {
+		/*for i := 0; i < 33; i++ {
 			vector := m.MixFloat64()
 			histogram := neural.Distribution(vector)
 			symbol, max := byte(0), 0.0
@@ -450,6 +452,23 @@ func main() {
 			}
 			solution = append(solution, symbol)
 			fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
+			m.Add(symbol)
+		}*/
+		for i := 0; i < 33; i++ {
+			vector := m.MixFloat64()
+			histogram := neural.Distribution(vector)
+			Softmax(histogram, .01)
+			sum := 0.0
+			selection := rng.Float64()
+			symbol := byte(0)
+			for i, v := range histogram {
+				sum += v
+				if selection < sum {
+					symbol = byte(i)
+					break
+				}
+			}
+			solution = append(solution, symbol)
 			m.Add(symbol)
 		}
 		fmt.Println(string(solution))
