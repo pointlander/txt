@@ -59,7 +59,7 @@ func Load() Neural {
 }
 
 // Learn learn a neural network
-func Learn(txts []TXT) Neural {
+func Learn(data []byte) Neural {
 	rng := rand.New(rand.NewSource(1))
 	set := tf64.NewSet()
 	set.Add("w1", 256, 256)
@@ -102,8 +102,8 @@ func Learn(txts []TXT) Neural {
 
 	last := 0.0
 	points := make(plotter.XYs, 0, 8)
-	fmt.Println("learning:", len(txts))
-	for i := 0; i < len(txts); i++ {
+	fmt.Println("learning:", len(data))
+	for i := 0; i < len(data); i++ {
 		pow := func(x float64) float64 {
 			y := math.Pow(x, float64(i+1))
 			if math.IsNaN(y) || math.IsInf(y, 0) {
@@ -113,20 +113,22 @@ func Learn(txts []TXT) Neural {
 		}
 
 		others.Zero()
-		index := rng.Intn(len(txts))
-		input := others.ByName["input"].X
-		sum := 0.0
-		for _, v := range txts[index].Vector {
-			sum += float64(v)
+		index := rng.Intn(len(data) - 256)
+		m := NewMixer()
+		end := index + 8 + rng.Intn(120)
+		for j := index; j < end; j++ {
+			m.Add(data[j])
 		}
+		vector := m.MixFloat64()
+		input := others.ByName["input"].X
 		for j := range input {
-			input[j] = float64(txts[index].Vector[j]) / sum
+			input[j] = vector[j]
 		}
 		output := others.ByName["output"].X
 		for j := range output {
 			output[j] = .1
 		}
-		output[txts[index].Symbol] = 1
+		output[data[end]] = 1
 
 		set.Zero()
 		cost := tf64.Gradient(loss).X[0]
@@ -165,7 +167,7 @@ func Learn(txts []TXT) Neural {
 		}
 	}
 
-	err := set.Save("set.db", last, len(txts))
+	err := set.Save("set.db", last, len(data))
 	if err != nil {
 		panic(err)
 	}

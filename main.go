@@ -336,6 +336,12 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+
+		if *FlagNeural {
+			Learn(data)
+			return
+		}
+
 		db, err := os.Create("vectors.bin")
 		if err != nil {
 			panic(err)
@@ -352,11 +358,6 @@ func main() {
 			txt.Symbol = data[i+1]
 			txt.Index = uint64(i)
 			txts[i] = txt
-		}
-
-		if *FlagNeural {
-			Learn(txts)
-			return
 		}
 
 		sort.Slice(txts, func(i, j int) bool {
@@ -469,6 +470,7 @@ func main() {
 				}
 			}
 			solution = append(solution, symbol)
+			fmt.Printf("%d %s\n", symbol, strconv.Quote(string(symbol)))
 			m.Add(symbol)
 		}
 		fmt.Println(string(solution))
