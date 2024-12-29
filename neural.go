@@ -45,7 +45,7 @@ func Load() Neural {
 		w.X = w.X[:cap(w.X)]
 	}
 
-	l1 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
+	l1 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
 	l2 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2")))
 	loss := tf64.Quadratic(l2, others.Get("output"))
 
@@ -62,9 +62,9 @@ func Load() Neural {
 func Learn(txts []TXT) Neural {
 	rng := rand.New(rand.NewSource(1))
 	set := tf64.NewSet()
-	set.Add("w1", 256, 1024)
-	set.Add("b1", 1024)
-	set.Add("w2", 1024, 256)
+	set.Add("w1", 256, 256)
+	set.Add("b1", 256)
+	set.Add("w2", 512, 256)
 	set.Add("b2", 256)
 
 	for i := range set.Weights {
@@ -96,7 +96,7 @@ func Learn(txts []TXT) Neural {
 		w.X = w.X[:cap(w.X)]
 	}
 
-	l1 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
+	l1 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
 	l2 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2")))
 	loss := tf64.Quadratic(l2, others.Get("output"))
 
