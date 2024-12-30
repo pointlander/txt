@@ -51,9 +51,9 @@ func Load() Neural {
 	query := tf64.Mul(set.Get("query"), others.Get("input"))
 	key := tf64.Mul(set.Get("key"), others.Get("input"))
 	value := tf64.Mul(set.Get("value"), others.Get("input"))
-	l1 := sumRows(tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value))))
+	l1 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value)))
 	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
-	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
+	l3 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2"))))
 	loss := tf64.Quadratic(l3, others.Get("output"))
 
 	return Neural{
@@ -138,15 +138,15 @@ func Learn(data []byte) Neural {
 	query := tf64.Mul(set.Get("query"), others.Get("input"))
 	key := tf64.Mul(set.Get("key"), others.Get("input"))
 	value := tf64.Mul(set.Get("value"), others.Get("input"))
-	l1 := sumRows(tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value))))
+	l1 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value)))
 	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
-	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
+	l3 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2"))))
 	loss := tf64.Quadratic(l3, others.Get("output"))
 
 	last := 0.0
 	points := make(plotter.XYs, 0, 8)
 	fmt.Println("learning:", len(data))
-	for i := 0; i < len(data); i++ {
+	for i := 0; i < 30*1024; i++ {
 		pow := func(x float64) float64 {
 			y := math.Pow(x, float64(i+1))
 			if math.IsNaN(y) || math.IsInf(y, 0) {
@@ -169,7 +169,7 @@ func Learn(data []byte) Neural {
 		}
 		output := others.ByName["output"].X
 		for j := range output {
-			output[j] = .1
+			output[j] = .001
 		}
 		output[data[end]] = 1
 
@@ -250,7 +250,7 @@ func (n *Neural) Inference(input [256]float64) int {
 	for i := range in {
 		in[i] = input[i]
 	}
-	n.L2(func(a *tf64.V) bool {
+	n.L3(func(a *tf64.V) bool {
 		for i, v := range a.X {
 			if v > max {
 				max, symbol = v, i
@@ -268,7 +268,7 @@ func (n *Neural) Distribution(input [256]float64) (d []float64) {
 	for i := range in {
 		in[i] = input[i]
 	}
-	n.L2(func(a *tf64.V) bool {
+	n.L3(func(a *tf64.V) bool {
 		d = a.X
 		return true
 	})

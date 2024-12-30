@@ -33,7 +33,7 @@ const (
 	// B2 exponential decay rate for the second-moment estimates
 	B2 = 0.89
 	// Eta is the learning rate
-	Eta = 0.001
+	Eta = 0.0001
 )
 
 const (
@@ -458,7 +458,14 @@ func main() {
 		for i := 0; i < 33; i++ {
 			vector := m.MixFloat64()
 			histogram := neural.Distribution(vector)
-			Softmax(histogram, .01)
+			//Softmax(histogram, .01)
+			total := 0.0
+			for _, v := range histogram {
+				total += v
+			}
+			for i, v := range histogram {
+				histogram[i] = v / total
+			}
 			sum := 0.0
 			selection := rng.Float64()
 			symbol := byte(0)
