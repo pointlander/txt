@@ -159,6 +159,22 @@ func (m Mixer) MixFloat64() [256]float64 {
 	return mix
 }
 
+// MixFloat64Vector mixes the histograms outputting float64
+func (m Mixer) MixFloat64Vector() Matrix {
+	x := NewMatrix(256, Size)
+	for i := range m.Histograms {
+		sum := 0.0
+		for _, v := range m.Histograms[i].Vector {
+			sum += float64(v)
+		}
+		for _, v := range m.Histograms[i].Vector {
+			x.Data = append(x.Data, float64(v)/sum)
+		}
+	}
+	y := SelfAttention(x, x, x)
+	return y
+}
+
 // Add adds a symbol to a mixer
 func (m *Mixer) Add(s byte) {
 	for i := range m.Histograms {
@@ -456,8 +472,8 @@ func main() {
 			m.Add(symbol)
 		}*/
 		for i := 0; i < 33; i++ {
-			vector := m.MixFloat64()
-			histogram := neural.Distribution(vector)
+			vector := m.MixFloat64Vector()
+			histogram := neural.Distribution(vector.Data)
 			//Softmax(histogram, .01)
 			total := 0.0
 			for _, v := range histogram {

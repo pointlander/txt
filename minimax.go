@@ -37,8 +37,8 @@ func Max(neural *Neural, depth int, action byte, m *Mixer) float64 {
 	if depth >= Depth {
 		cp := m.Copy()
 		cp.Add(action)
-		vector := cp.MixFloat64()
-		histogram := neural.Distribution(vector)
+		vector := cp.MixFloat64Vector()
+		histogram := neural.Distribution(vector.Data)
 		Softmax(histogram, 1)
 		e := 0.0
 		for _, v := range histogram {
@@ -64,8 +64,8 @@ func Max(neural *Neural, depth int, action byte, m *Mixer) float64 {
 	}
 	cp := m.Copy()
 	cp.Add(action)
-	vector := cp.MixFloat64()
-	histogram := neural.Distribution(vector)
+	vector := cp.MixFloat64Vector()
+	histogram := neural.Distribution(vector.Data)
 	Softmax(histogram, 1)
 	max := 0.0
 	for i, v := range histogram {
@@ -84,8 +84,8 @@ func Min(neural *Neural, depth int, action byte, m *Mixer) float64 {
 	if depth >= Depth {
 		cp := m.Copy()
 		cp.Add(action)
-		vector := cp.MixFloat64()
-		histogram := neural.Distribution(vector)
+		vector := cp.MixFloat64Vector()
+		histogram := neural.Distribution(vector.Data)
 		Softmax(histogram, 1)
 		e := 0.0
 		for _, v := range histogram {
@@ -111,8 +111,8 @@ func Min(neural *Neural, depth int, action byte, m *Mixer) float64 {
 	}
 	cp := m.Copy()
 	cp.Add(action)
-	vector := cp.MixFloat64()
-	histogram := neural.Distribution(vector)
+	vector := cp.MixFloat64Vector()
+	histogram := neural.Distribution(vector.Data)
 	Softmax(histogram, 1)
 	min := math.MaxFloat64
 	for i, v := range histogram {

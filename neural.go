@@ -125,7 +125,7 @@ func Learn(data []byte) Neural {
 	}
 
 	others := tf64.NewSet()
-	others.Add("input", 256)
+	others.Add("input", 256, Size)
 	others.Add("output", 256)
 
 	for i := range others.Weights {
@@ -146,7 +146,7 @@ func Learn(data []byte) Neural {
 	last := 0.0
 	points := make(plotter.XYs, 0, 8)
 	fmt.Println("learning:", len(data))
-	for i := 0; i < 30*1024; i++ {
+	for i := 0; i < len(data); i++ {
 		pow := func(x float64) float64 {
 			y := math.Pow(x, float64(i+1))
 			if math.IsNaN(y) || math.IsInf(y, 0) {
@@ -162,10 +162,10 @@ func Learn(data []byte) Neural {
 		for j := index; j < end; j++ {
 			m.Add(data[j])
 		}
-		vector := m.MixFloat64()
+		vector := m.MixFloat64Vector()
 		input := others.ByName["input"].X
 		for j := range input {
-			input[j] = vector[j]
+			input[j] = vector.Data[j]
 		}
 		output := others.ByName["output"].X
 		for j := range output {
@@ -263,7 +263,7 @@ func (n *Neural) Inference(input [256]float64) int {
 }
 
 // Distribution performs inference of the neural network
-func (n *Neural) Distribution(input [256]float64) (d []float64) {
+func (n *Neural) Distribution(input []float64) (d []float64) {
 	in := n.Others.ByName["input"].X
 	for i := range in {
 		in[i] = input[i]
