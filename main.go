@@ -111,6 +111,21 @@ func (m Mixer) Copy() Mixer {
 	}
 }
 
+// Raw returns the raw matrix
+func (m Mixer) Raw() Matrix {
+	x := NewMatrix(256, Size)
+	for i := range m.Histograms {
+		sum := 0.0
+		for _, v := range m.Histograms[i].Vector {
+			sum += float64(v)
+		}
+		for _, v := range m.Histograms[i].Vector {
+			x.Data = append(x.Data, float64(v)/sum)
+		}
+	}
+	return x
+}
+
 // Mix mixes the histograms
 func (m Mixer) Mix() [256]byte {
 	mix := [256]byte{}
@@ -472,7 +487,7 @@ func main() {
 			m.Add(symbol)
 		}*/
 		for i := 0; i < 33; i++ {
-			vector := m.MixFloat64Vector()
+			vector := m.Raw()
 			histogram := neural.Distribution(vector.Data)
 			//Softmax(histogram, .01)
 			total := 0.0

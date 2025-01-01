@@ -162,10 +162,10 @@ func Learn(data []byte) Neural {
 		for j := index; j < end; j++ {
 			m.Add(data[j])
 		}
-		vector := m.MixFloat64Vector()
+		vector := m.Raw()
 		input := others.ByName["input"].X
 		for j := range input {
-			input[j] = vector.Data[j] + math.SmallestNonzeroFloat64
+			input[j] = vector.Data[j]
 		}
 		output := others.ByName["output"].X
 		for j := range output {
@@ -266,7 +266,7 @@ func (n *Neural) Inference(input [256]float64) int {
 func (n *Neural) Distribution(input []float64) (d []float64) {
 	in := n.Others.ByName["input"].X
 	for i := range in {
-		in[i] = input[i] + math.SmallestNonzeroFloat64
+		in[i] = input[i]
 	}
 	n.L3(func(a *tf64.V) bool {
 		d = a.X
