@@ -165,7 +165,7 @@ func Learn(data []byte) Neural {
 		vector := m.MixFloat64Vector()
 		input := others.ByName["input"].X
 		for j := range input {
-			input[j] = vector.Data[j]
+			input[j] = vector.Data[j] + math.SmallestNonzeroFloat64
 		}
 		output := others.ByName["output"].X
 		for j := range output {
@@ -206,7 +206,7 @@ func Learn(data []byte) Neural {
 		}
 		points = append(points, plotter.XY{X: float64(i), Y: float64(cost)})
 		if i%1024 == 0 {
-			fmt.Println(cost)
+			fmt.Println(i, cost)
 		}
 	}
 
@@ -266,7 +266,7 @@ func (n *Neural) Inference(input [256]float64) int {
 func (n *Neural) Distribution(input []float64) (d []float64) {
 	in := n.Others.ByName["input"].X
 	for i := range in {
-		in[i] = input[i]
+		in[i] = input[i] + math.SmallestNonzeroFloat64
 	}
 	n.L3(func(a *tf64.V) bool {
 		d = a.X
