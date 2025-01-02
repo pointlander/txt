@@ -25,6 +25,9 @@ type Neural struct {
 	L1     tf64.Meta
 	L2     tf64.Meta
 	L3     tf64.Meta
+	L4     tf64.Meta
+	L5     tf64.Meta
+	L6     tf64.Meta
 	Loss   tf64.Meta
 }
 
@@ -53,8 +56,14 @@ func Load() Neural {
 	value := tf64.Mul(set.Get("value"), others.Get("input"))
 	l1 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value)))
 	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
-	l3 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2"))))
-	loss := tf64.Quadratic(l3, others.Get("output"))
+	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
+	query2 := tf64.Mul(set.Get("query2"), l3)
+	key2 := tf64.Mul(set.Get("key2"), l3)
+	value2 := tf64.Mul(set.Get("value2"), l3)
+	l4 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2)))
+	l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l4), set.Get("b1")))
+	l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w2"), l5), set.Get("b2"))))
+	loss := tf64.Quadratic(l6, others.Get("output"))
 
 	return Neural{
 		Set:    set,
@@ -62,6 +71,9 @@ func Load() Neural {
 		L1:     l1,
 		L2:     l2,
 		L3:     l3,
+		L4:     l4,
+		L5:     l5,
+		L6:     l6,
 		Loss:   loss,
 	}
 }
@@ -99,10 +111,17 @@ func Learn(data []byte) Neural {
 	set.Add("query", 256, 256)
 	set.Add("key", 256, 256)
 	set.Add("value", 256, 256)
+	set.Add("query2", 256, 256)
+	set.Add("key2", 256, 256)
+	set.Add("value2", 256, 256)
 	set.Add("w1", 256, 256)
 	set.Add("b1", 256)
 	set.Add("w2", 512, 256)
 	set.Add("b2", 256)
+	set.Add("w3", 256, 256)
+	set.Add("b3", 256)
+	set.Add("w4", 512, 256)
+	set.Add("b4", 256)
 
 	for i := range set.Weights {
 		w := set.Weights[i]
@@ -140,8 +159,14 @@ func Learn(data []byte) Neural {
 	value := tf64.Mul(set.Get("value"), others.Get("input"))
 	l1 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value)))
 	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
-	l3 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2"))))
-	loss := tf64.Quadratic(l3, others.Get("output"))
+	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
+	query2 := tf64.Mul(set.Get("query2"), l3)
+	key2 := tf64.Mul(set.Get("key2"), l3)
+	value2 := tf64.Mul(set.Get("value2"), l3)
+	l4 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2)))
+	l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l4), set.Get("b1")))
+	l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w2"), l5), set.Get("b2"))))
+	loss := tf64.Quadratic(l6, others.Get("output"))
 
 	last := 0.0
 	points := make(plotter.XYs, 0, 8)
@@ -239,6 +264,9 @@ func Learn(data []byte) Neural {
 		L1:     l1,
 		L2:     l2,
 		L3:     l3,
+		L4:     l4,
+		L5:     l5,
+		L6:     l6,
 		Loss:   loss,
 	}
 }
@@ -250,7 +278,7 @@ func (n *Neural) Inference(input [256]float64) int {
 	for i := range in {
 		in[i] = input[i]
 	}
-	n.L3(func(a *tf64.V) bool {
+	n.L6(func(a *tf64.V) bool {
 		for i, v := range a.X {
 			if v > max {
 				max, symbol = v, i
@@ -268,7 +296,7 @@ func (n *Neural) Distribution(input []float64) (d []float64) {
 	for i := range in {
 		in[i] = input[i]
 	}
-	n.L3(func(a *tf64.V) bool {
+	n.L6(func(a *tf64.V) bool {
 		d = a.X
 		return true
 	})
