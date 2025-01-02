@@ -54,13 +54,13 @@ func Load() Neural {
 	query := tf64.Mul(set.Get("query"), others.Get("input"))
 	key := tf64.Mul(set.Get("key"), others.Get("input"))
 	value := tf64.Mul(set.Get("value"), others.Get("input"))
-	l1 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value)))
+	l1 := tf64.Add(others.Get("input"), tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value))))
 	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
 	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
 	query2 := tf64.Mul(set.Get("query2"), l3)
 	key2 := tf64.Mul(set.Get("key2"), l3)
 	value2 := tf64.Mul(set.Get("value2"), l3)
-	l4 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2)))
+	l4 := tf64.Add(l3, tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2))))
 	l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w3"), l4), set.Get("b3")))
 	l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w4"), l5), set.Get("b4"))))
 	loss := tf64.Quadratic(l6, others.Get("output"))
@@ -154,18 +154,21 @@ func Learn(data []byte) Neural {
 
 	sumRows := tf64.U(SumRows)
 
+	options := map[string]interface{}{
+		"rng": rng,
+	}
 	query := tf64.Mul(set.Get("query"), others.Get("input"))
 	key := tf64.Mul(set.Get("key"), others.Get("input"))
 	value := tf64.Mul(set.Get("value"), others.Get("input"))
-	l1 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value)))
-	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
-	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
+	l1 := tf64.Add(others.Get("input"), tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value))))
+	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), tf64.Dropout(l1, options)), set.Get("b1")))
+	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), tf64.Dropout(l2, options)), set.Get("b2")))
 	query2 := tf64.Mul(set.Get("query2"), l3)
 	key2 := tf64.Mul(set.Get("key2"), l3)
 	value2 := tf64.Mul(set.Get("value2"), l3)
-	l4 := tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2)))
-	l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w3"), l4), set.Get("b3")))
-	l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w4"), l5), set.Get("b4"))))
+	l4 := tf64.Add(l3, tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2))))
+	l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w3"), tf64.Dropout(l4, options)), set.Get("b3")))
+	l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w4"), tf64.Dropout(l5, options)), set.Get("b4"))))
 	loss := tf64.Quadratic(l6, others.Get("output"))
 
 	last, epochs := 0.0, 0
