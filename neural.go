@@ -212,6 +212,7 @@ func Learn(data []byte) Neural {
 			m.Add(data[j])
 		}
 		vector := m.MixFloat64() //m.Raw()
+		Softmax(vector[:], 1.0)
 		input := others.ByName["input"].X
 		for j := range input {
 			input[j] = vector[j]
