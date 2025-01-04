@@ -290,7 +290,7 @@ func Learn(data []byte) Neural {
 		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
 		p.Add(scatter)
 
-		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("epochs_%d.png", prefix))
+		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("epochs/epochs_%d.png", prefix))
 		if err != nil {
 			panic(err)
 		}
