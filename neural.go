@@ -32,7 +32,7 @@ type Neural struct {
 }
 
 // Load loads a neural network from a file
-func Load() Neural {
+func Load() (networks [256]Neural) {
 	set := tf64.NewSet()
 	cost, epochs, err := set.Open("set.db")
 	if err != nil {
@@ -40,48 +40,52 @@ func Load() Neural {
 	}
 	fmt.Println(cost, epochs)
 
-	others := tf64.NewSet()
-	others.Add("input", 256)
-	others.Add("output", 256)
+	for i := range networks {
+		others := tf64.NewSet()
+		others.Add("input", 256)
+		others.Add("output", 256)
 
-	for i := range others.Weights {
-		w := others.Weights[i]
-		w.X = w.X[:cap(w.X)]
+		for i := range others.Weights {
+			w := others.Weights[i]
+			w.X = w.X[:cap(w.X)]
+		}
+
+		l1 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w1_%d", i)), others.Get("input")), set.Get(fmt.Sprintf("b1_%d", i))))
+		l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w2_%d", i)), l1), set.Get(fmt.Sprintf("b2_%d", i))))
+		l3 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w3_%d", i)), l2), set.Get(fmt.Sprintf("b3_%d", i))))
+		l4 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w4_%d", i)), l3), set.Get(fmt.Sprintf("b4_%d", i))))
+		loss := tf64.Quadratic(l4, others.Get("output"))
+
+		/*sumRows := tf64.U(SumRows)
+
+		query := tf64.Mul(set.Get("query"), others.Get("input"))
+		key := tf64.Mul(set.Get("key"), others.Get("input"))
+		value := tf64.Mul(set.Get("value"), others.Get("input"))
+		l1 := tf64.Add(others.Get("input"), tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value))))
+		l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
+		l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
+		query2 := tf64.Mul(set.Get("query2"), l3)
+		key2 := tf64.Mul(set.Get("key2"), l3)
+		value2 := tf64.Mul(set.Get("value2"), l3)
+		l4 := tf64.Add(l3, tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2))))
+		l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w3"), l4), set.Get("b3")))
+		l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w4"), l5), set.Get("b4"))))
+		loss := tf64.Quadratic(l6, others.Get("output"))*/
+
+		networks[i] = Neural{
+			Set:    set,
+			Others: others,
+			L1:     l1,
+			L2:     l2,
+			L3:     l3,
+			L4:     l4,
+			//L5:     l5,
+			//L6:     l6,
+			Loss: loss,
+		}
 	}
 
-	l1 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), others.Get("input")), set.Get("b1")))
-	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w2"), l1), set.Get("b2")))
-	l3 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w3"), l2), set.Get("b3")))
-	l4 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w4"), l3), set.Get("b4")))
-	loss := tf64.Quadratic(l4, others.Get("output"))
-
-	/*sumRows := tf64.U(SumRows)
-
-	query := tf64.Mul(set.Get("query"), others.Get("input"))
-	key := tf64.Mul(set.Get("key"), others.Get("input"))
-	value := tf64.Mul(set.Get("value"), others.Get("input"))
-	l1 := tf64.Add(others.Get("input"), tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query, key)), tf64.T(value))))
-	l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w1"), l1), set.Get("b1")))
-	l3 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get("w2"), l2), set.Get("b2")))
-	query2 := tf64.Mul(set.Get("query2"), l3)
-	key2 := tf64.Mul(set.Get("key2"), l3)
-	value2 := tf64.Mul(set.Get("value2"), l3)
-	l4 := tf64.Add(l3, tf64.T(tf64.Mul(tf64.Softmax(tf64.Mul(query2, key2)), tf64.T(value2))))
-	l5 := tf64.Everett(tf64.Add(tf64.Mul(set.Get("w3"), l4), set.Get("b3")))
-	l6 := tf64.Sigmoid(sumRows(tf64.Add(tf64.Mul(set.Get("w4"), l5), set.Get("b4"))))
-	loss := tf64.Quadratic(l6, others.Get("output"))*/
-
-	return Neural{
-		Set:    set,
-		Others: others,
-		L1:     l1,
-		L2:     l2,
-		L3:     l3,
-		L4:     l4,
-		//L5:     l5,
-		//L6:     l6,
-		Loss: loss,
-	}
+	return networks
 }
 
 // SumRows sums the rows of the matrix
