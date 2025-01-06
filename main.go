@@ -115,12 +115,12 @@ func (m Mixer) Copy() Mixer {
 func (m Mixer) Raw() Matrix {
 	x := NewMatrix(256, Size)
 	for i := range m.Histograms {
-		sum := 0.0
+		sum := float32(0.0)
 		for _, v := range m.Histograms[i].Vector {
-			sum += float64(v)
+			sum += float32(v)
 		}
 		for _, v := range m.Histograms[i].Vector {
-			x.Data = append(x.Data, float64(v)/sum)
+			x.Data = append(x.Data, float32(v)/sum)
 		}
 	}
 	return x
@@ -131,16 +131,16 @@ func (m Mixer) Mix() [256]byte {
 	mix := [256]byte{}
 	x := NewMatrix(256, Size)
 	for i := range m.Histograms {
-		sum := 0.0
+		sum := float32(0.0)
 		for _, v := range m.Histograms[i].Vector {
-			sum += float64(v)
+			sum += float32(v)
 		}
 		for _, v := range m.Histograms[i].Vector {
-			x.Data = append(x.Data, float64(v)/sum)
+			x.Data = append(x.Data, float32(v)/sum)
 		}
 	}
 	y := SelfAttention(x, x, x).Sum()
-	sum := 0.0
+	sum := float32(0.0)
 	for _, v := range y.Data {
 		sum += v
 	}
@@ -150,40 +150,40 @@ func (m Mixer) Mix() [256]byte {
 	return mix
 }
 
-// MixFloat64 mixes the histograms outputting float64
-func (m Mixer) MixFloat64() [256]float64 {
-	mix := [256]float64{}
+// MixFloat32 mixes the histograms outputting float64
+func (m Mixer) MixFloat32() [256]float32 {
+	mix := [256]float32{}
 	x := NewMatrix(256, Size)
 	for i := range m.Histograms {
-		sum := 0.0
+		sum := float32(0.0)
 		for _, v := range m.Histograms[i].Vector {
-			sum += float64(v)
+			sum += float32(v)
 		}
 		for _, v := range m.Histograms[i].Vector {
-			x.Data = append(x.Data, float64(v)/sum)
+			x.Data = append(x.Data, float32(v)/sum)
 		}
 	}
 	y := SelfAttention(x, x, x).Sum()
-	sum := 0.0
+	sum := float32(0.0)
 	for _, v := range y.Data {
 		sum += v
 	}
 	for i := range mix {
-		mix[i] = y.Data[i] / sum
+		mix[i] = float32(y.Data[i] / sum)
 	}
 	return mix
 }
 
-// MixFloat64Vector mixes the histograms outputting float64
-func (m Mixer) MixFloat64Vector() Matrix {
+// MixFloat32Vector mixes the histograms outputting float32
+func (m Mixer) MixFloat32Vector() Matrix {
 	x := NewMatrix(256, Size)
 	for i := range m.Histograms {
-		sum := 0.0
+		sum := float32(0.0)
 		for _, v := range m.Histograms[i].Vector {
-			sum += float64(v)
+			sum += float32(v)
 		}
 		for _, v := range m.Histograms[i].Vector {
-			x.Data = append(x.Data, float64(v)/sum)
+			x.Data = append(x.Data, float32(v)/sum)
 		}
 	}
 	y := SelfAttention(x, x, x)
@@ -295,16 +295,16 @@ func (t *TXT) CS(vector *[256]byte) float64 {
 	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
-// CSFloat64 is float64 cosine similarity
-func (t *TXT) CSFloat64(vector *[256]float64) float64 {
-	aa, bb, ab := 0.0, 0.0, 0.0
+// CSFloat32 is float32 cosine similarity
+func (t *TXT) CSFloat32(vector *[256]float32) float32 {
+	aa, bb, ab := float32(0.0), float32(0.0), float32(0.0)
 	for i := range vector {
-		a, b := vector[i], float64(t.Vector[i])
+		a, b := vector[i], float32(t.Vector[i])
 		aa += a * a
 		bb += b * b
 		ab += a * b
 	}
-	return ab / (math.Sqrt(aa) * math.Sqrt(bb))
+	return ab / (float32(math.Sqrt(float64(aa))) * float32(math.Sqrt(float64(bb))))
 }
 
 // CSFloat64 is float64 cosine similarity
@@ -487,19 +487,19 @@ func main() {
 			m.Add(symbol)
 		}*/
 		for i := 0; i < 33; i++ {
-			vector := m.MixFloat64() //Raw()
+			vector := m.MixFloat32() //Raw()
 			Softmax(vector[:], .01)
 			histogram := neural[m.Markov[0]].Distribution(vector[:])
 			//Softmax(histogram, .01)
-			total := 0.0
+			total := float32(0.0)
 			for _, v := range histogram {
 				total += v
 			}
 			for i, v := range histogram {
 				histogram[i] = v / total
 			}
-			sum := 0.0
-			selection := rng.Float64()
+			sum := float32(0.0)
+			selection := rng.Float32()
 			symbol := byte(0)
 			for i, v := range histogram {
 				sum += v
@@ -518,11 +518,11 @@ func main() {
 	if *FlagBrute {
 		txt, reader := TXT{}, NewTXTReader(vectors)
 		for j := 0; j < *FlagCount; j++ {
-			vector := m.MixFloat64()
-			symbol, max := byte(0), -1.0
+			vector := m.MixFloat32()
+			symbol, max := byte(0), float32(-1.0)
 			done := reader.Read(&txt)
 			for !done {
-				s := txt.CSFloat64(&vector)
+				s := txt.CSFloat32(&vector)
 				if s > max {
 					max, symbol = s, txt.Symbol
 				}
@@ -556,8 +556,8 @@ func main() {
 			}
 			return false
 		})
-		symbol, max := byte(0), -1.0
-		vector := m.MixFloat64()
+		symbol, max := byte(0), float32(-1.0)
+		vector := m.MixFloat32()
 		for k := 0; k < 2048; k++ {
 			index := index + k
 			if index < 0 {
@@ -570,7 +570,7 @@ func main() {
 				panic(err)
 			}
 			reader.Read(&txt)
-			s := txt.CSFloat64(&vector)
+			s := txt.CSFloat32(&vector)
 			if s > max {
 				max, symbol = s, txt.Symbol
 			}

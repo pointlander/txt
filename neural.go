@@ -10,7 +10,7 @@ import (
 	"math/rand"
 	"strings"
 
-	"github.com/pointlander/gradient/tf64"
+	"github.com/pointlander/gradient/tf32"
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -20,20 +20,18 @@ import (
 
 // Neural is a neural network
 type Neural struct {
-	Set    tf64.Set
-	Others tf64.Set
-	L1     tf64.Meta
-	L2     tf64.Meta
-	L3     tf64.Meta
-	L4     tf64.Meta
-	//L5     tf64.Meta
-	//L6     tf64.Meta
-	Loss tf64.Meta
+	Set    tf32.Set
+	Others tf32.Set
+	L1     tf32.Meta
+	L2     tf32.Meta
+	L3     tf32.Meta
+	L4     tf32.Meta
+	Loss   tf32.Meta
 }
 
 // Load loads a neural network from a file
 func Load() (networks [256]Neural) {
-	set := tf64.NewSet()
+	set := tf32.NewSet()
 	cost, epochs, err := set.Open("set.db")
 	if err != nil {
 		panic(err)
@@ -41,7 +39,7 @@ func Load() (networks [256]Neural) {
 	fmt.Println(cost, epochs)
 
 	for i := range networks {
-		others := tf64.NewSet()
+		others := tf32.NewSet()
 		others.Add("input", 256)
 		others.Add("output", 256)
 
@@ -50,11 +48,11 @@ func Load() (networks [256]Neural) {
 			w.X = w.X[:cap(w.X)]
 		}
 
-		l1 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w1_%d", i)), others.Get("input")), set.Get(fmt.Sprintf("b1_%d", i))))
-		l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w2_%d", i)), l1), set.Get(fmt.Sprintf("b2_%d", i))))
-		l3 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w3_%d", i)), l2), set.Get(fmt.Sprintf("b3_%d", i))))
-		l4 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w4_%d", i)), l3), set.Get(fmt.Sprintf("b4_%d", i))))
-		loss := tf64.Quadratic(l4, others.Get("output"))
+		l1 := tf32.Everett(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w1_%d", i)), others.Get("input")), set.Get(fmt.Sprintf("b1_%d", i))))
+		l2 := tf32.Everett(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w2_%d", i)), l1), set.Get(fmt.Sprintf("b2_%d", i))))
+		l3 := tf32.Everett(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w3_%d", i)), l2), set.Get(fmt.Sprintf("b3_%d", i))))
+		l4 := tf32.Sigmoid(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w4_%d", i)), l3), set.Get(fmt.Sprintf("b4_%d", i))))
+		loss := tf32.Quadratic(l4, others.Get("output"))
 
 		/*sumRows := tf64.U(SumRows)
 
@@ -89,10 +87,10 @@ func Load() (networks [256]Neural) {
 }
 
 // SumRows sums the rows of the matrix
-func SumRows(k tf64.Continuation, node int, a *tf64.V, options ...map[string]interface{}) bool {
+func SumRows(k tf32.Continuation, node int, a *tf32.V, options ...map[string]interface{}) bool {
 	size, width := len(a.X), a.S[0]
-	total := 0.0
-	c := tf64.NewV(width)
+	total := float32(0.0)
+	c := tf32.NewV(width)
 	c.X = c.X[:cap(c.X)]
 	for i := 0; i < size; i += width {
 		for j, ax := range a.X[i : i+width] {
@@ -117,7 +115,7 @@ func SumRows(k tf64.Continuation, node int, a *tf64.V, options ...map[string]int
 // Learn learn a neural network
 func Learn(data []byte) Neural {
 	rng := rand.New(rand.NewSource(1))
-	set := tf64.NewSet()
+	set := tf32.NewSet()
 	for i := 0; i < 256; i++ {
 		/*set.Add("query", 256, 256)
 		set.Add("key", 256, 256)
@@ -147,31 +145,31 @@ func Learn(data []byte) Neural {
 		w := set.Weights[i]
 		if strings.HasPrefix(w.N, "b") {
 			w.X = w.X[:cap(w.X)]
-			w.States = make([][]float64, StateTotal)
+			w.States = make([][]float32, StateTotal)
 			for i := range w.States {
-				w.States[i] = make([]float64, len(w.X))
+				w.States[i] = make([]float32, len(w.X))
 			}
 			continue
 		}
 		factor := math.Sqrt(2.0 / float64(w.S[0]))
 		for i := 0; i < cap(w.X); i++ {
-			w.X = append(w.X, rng.NormFloat64()*factor)
+			w.X = append(w.X, float32(rng.NormFloat64()*factor))
 		}
-		w.States = make([][]float64, StateTotal)
+		w.States = make([][]float32, StateTotal)
 		for i := range w.States {
-			w.States[i] = make([]float64, len(w.X))
+			w.States[i] = make([]float32, len(w.X))
 		}
 	}
 
 	type Item struct {
-		Vector [256]float64
+		Vector [256]float32
 		Symbol byte
 	}
 	inputs := [256]chan *Item{}
 	done := make(chan bool, 8)
 
 	process := func(input chan *Item, prefix byte) {
-		others := tf64.NewSet()
+		others := tf32.NewSet()
 		//others.Add("input", 256, Size)
 		others.Add("input", 256)
 		others.Add("output", 256)
@@ -181,11 +179,11 @@ func Learn(data []byte) Neural {
 			w.X = w.X[:cap(w.X)]
 		}
 
-		l1 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w1_%d", prefix)), others.Get("input")), set.Get(fmt.Sprintf("b1_%d", prefix))))
-		l2 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w2_%d", prefix)), l1), set.Get(fmt.Sprintf("b2_%d", prefix))))
-		l3 := tf64.Everett(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w3_%d", prefix)), l2), set.Get(fmt.Sprintf("b3_%d", prefix))))
-		l4 := tf64.Sigmoid(tf64.Add(tf64.Mul(set.Get(fmt.Sprintf("w4_%d", prefix)), l3), set.Get(fmt.Sprintf("b4_%d", prefix))))
-		loss := tf64.Quadratic(l4, others.Get("output"))
+		l1 := tf32.Everett(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w1_%d", prefix)), others.Get("input")), set.Get(fmt.Sprintf("b1_%d", prefix))))
+		l2 := tf32.Everett(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w2_%d", prefix)), l1), set.Get(fmt.Sprintf("b2_%d", prefix))))
+		l3 := tf32.Everett(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w3_%d", prefix)), l2), set.Get(fmt.Sprintf("b3_%d", prefix))))
+		l4 := tf32.Sigmoid(tf32.Add(tf32.Mul(set.Get(fmt.Sprintf("w4_%d", prefix)), l3), set.Get(fmt.Sprintf("b4_%d", prefix))))
+		loss := tf32.Quadratic(l4, others.Get("output"))
 
 		/*sumRows := tf64.U(SumRows)
 
@@ -210,12 +208,12 @@ func Learn(data []byte) Neural {
 		fmt.Println("learning:", len(data))
 		i := 0
 		for in := range input {
-			pow := func(x float64) float64 {
-				y := math.Pow(x, float64(i+1))
+			pow := func(x float32) float32 {
+				y := math.Pow(float64(x), float64(i+1))
 				if math.IsNaN(y) || math.IsInf(y, 0) {
 					return 0
 				}
-				return y
+				return float32(y)
 			}
 
 			others.Zero()
@@ -231,12 +229,12 @@ func Learn(data []byte) Neural {
 			output[in.Symbol] = 1
 
 			set.Zero()
-			cost := tf64.Gradient(loss).X[0]
-			if math.IsNaN(cost) || math.IsInf(cost, 0) {
+			cost := tf32.Gradient(loss).X[0]
+			if math.IsNaN(float64(cost)) || math.IsInf(float64(cost), 0) {
 				break
 			}
 
-			norm := 0.0
+			norm := float32(0.0)
 			for _, p := range set.Weights {
 				if !strings.HasSuffix(p.N, fmt.Sprintf("_%d", prefix)) {
 					continue
@@ -245,9 +243,9 @@ func Learn(data []byte) Neural {
 					norm += d * d
 				}
 			}
-			norm = math.Sqrt(norm)
+			norm = float32(math.Sqrt(float64(norm)))
 			b1, b2 := pow(B1), pow(B2)
-			scaling := 1.0
+			scaling := float32(1.0)
 			if norm > 1 {
 				scaling = 1 / norm
 			}
@@ -266,7 +264,7 @@ func Learn(data []byte) Neural {
 					if vhat < 0 {
 						vhat = 0
 					}
-					w.X[l] -= Eta * mhat / (math.Sqrt(vhat) + 1e-8)
+					w.X[l] -= Eta * mhat / (float32(math.Sqrt(float64(vhat))) + 1e-8)
 				}
 			}
 			points = append(points, plotter.XY{X: float64(i), Y: float64(cost)})
@@ -303,7 +301,7 @@ func Learn(data []byte) Neural {
 		go process(inputs[i], byte(i))
 	}
 
-	for i := 0; i < 2*len(data); i++ {
+	for i := 0; i < 3*len(data); i++ {
 		index := rng.Intn(len(data) - 256)
 		m := NewMixer()
 		end := index + 8 + rng.Intn(120)
@@ -311,7 +309,7 @@ func Learn(data []byte) Neural {
 			m.Add(data[j])
 		}
 		item := Item{
-			Vector: m.MixFloat64(), //m.Raw()
+			Vector: m.MixFloat32(), //m.Raw()
 			Symbol: data[end],
 		}
 		inputs[m.Markov[0]] <- &item
@@ -327,7 +325,7 @@ func Learn(data []byte) Neural {
 		fmt.Println("done", i)
 	}
 
-	err := set.Save("set.db", 0.0, 2*len(data))
+	err := set.Save("set.db", 0.0, 3*len(data))
 	if err != nil {
 		panic(err)
 	}
@@ -336,13 +334,13 @@ func Learn(data []byte) Neural {
 }
 
 // Inference performs inference of the neural network
-func (n *Neural) Inference(input [256]float64) int {
-	symbol, max := 0, 0.0
+func (n *Neural) Inference(input [256]float32) int {
+	symbol, max := 0, float32(0.0)
 	in := n.Others.ByName["input"].X
 	for i := range in {
 		in[i] = input[i]
 	}
-	n.L4(func(a *tf64.V) bool {
+	n.L4(func(a *tf32.V) bool {
 		for i, v := range a.X {
 			if v > max {
 				max, symbol = v, i
@@ -355,12 +353,12 @@ func (n *Neural) Inference(input [256]float64) int {
 }
 
 // Distribution performs inference of the neural network
-func (n *Neural) Distribution(input []float64) (d []float64) {
+func (n *Neural) Distribution(input []float32) (d []float32) {
 	in := n.Others.ByName["input"].X
 	for i := range in {
 		in[i] = input[i]
 	}
-	n.L4(func(a *tf64.V) bool {
+	n.L4(func(a *tf32.V) bool {
 		d = a.X
 		return true
 	})

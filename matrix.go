@@ -19,13 +19,13 @@ const (
 type Matrix struct {
 	Cols int
 	Rows int
-	Data []float64
+	Data []float32
 }
 
-// NewMatrix creates a new float64 matrix
-func NewMatrix(cols, rows int, data ...float64) Matrix {
+// NewMatrix creates a new float32 matrix
+func NewMatrix(cols, rows int, data ...float32) Matrix {
 	if data == nil {
-		data = make([]float64, 0, cols*rows)
+		data = make([]float32, 0, cols*rows)
 	}
 	return Matrix{
 		Cols: cols,
@@ -35,7 +35,7 @@ func NewMatrix(cols, rows int, data ...float64) Matrix {
 }
 
 // Dot computes the dot product
-func dot(x, y []float64) (z float64) {
+func dot(x, y []float32) (z float32) {
 	for i := range x {
 		z += x[i] * y[i]
 	}
@@ -51,7 +51,7 @@ func (m Matrix) MulT(n Matrix) Matrix {
 	o := Matrix{
 		Cols: m.Rows,
 		Rows: n.Rows,
-		Data: make([]float64, 0, m.Rows*n.Rows),
+		Data: make([]float32, 0, m.Rows*n.Rows),
 	}
 	lenn, lenm := len(n.Data), len(m.Data)
 	for i := 0; i < lenn; i += columns {
@@ -74,7 +74,7 @@ func (m Matrix) Add(n Matrix) Matrix {
 	o := Matrix{
 		Cols: m.Cols,
 		Rows: m.Rows,
-		Data: make([]float64, 0, m.Cols*m.Rows),
+		Data: make([]float32, 0, m.Cols*m.Rows),
 	}
 	for i, value := range m.Data {
 		o.Data = append(o.Data, value+n.Data[i%lenb])
@@ -82,9 +82,9 @@ func (m Matrix) Add(n Matrix) Matrix {
 	return o
 }
 
-func (m Matrix) Softmax(T float64) Matrix {
+func (m Matrix) Softmax(T float32) Matrix {
 	output := NewMatrix(m.Cols, m.Rows)
-	max := 0.0
+	max := float32(0.0)
 	for _, v := range m.Data {
 		v /= T
 		if v > max {
@@ -92,10 +92,10 @@ func (m Matrix) Softmax(T float64) Matrix {
 		}
 	}
 	s := max * S
-	sum := 0.0
-	values := make([]float64, len(m.Data))
+	sum := float32(0.0)
+	values := make([]float32, len(m.Data))
 	for j, value := range m.Data {
-		values[j] = math.Exp(value/T - s)
+		values[j] = float32(math.Exp(float64(value/T - s)))
 		sum += values[j]
 	}
 	for _, value := range values {
@@ -109,7 +109,7 @@ func (m Matrix) Sum() Matrix {
 	o := Matrix{
 		Cols: m.Cols,
 		Rows: 1,
-		Data: make([]float64, m.Cols),
+		Data: make([]float32, m.Cols),
 	}
 	for i := 0; i < m.Rows; i++ {
 		offset := i * m.Cols
@@ -125,7 +125,7 @@ func (m Matrix) T() Matrix {
 	o := Matrix{
 		Cols: m.Rows,
 		Rows: m.Cols,
-		Data: make([]float64, 0, m.Cols*m.Rows),
+		Data: make([]float32, 0, m.Cols*m.Rows),
 	}
 	for i := 0; i < m.Cols; i++ {
 		for j := 0; j < m.Rows; j++ {
@@ -135,17 +135,17 @@ func (m Matrix) T() Matrix {
 	return o
 }
 
-func softmax(values []float64) {
-	max := 0.0
+func softmax(values []float32) {
+	max := float32(0.0)
 	for _, v := range values {
 		if v > max {
 			max = v
 		}
 	}
 	s := max * S
-	sum := 0.0
+	sum := float32(0.0)
 	for j, value := range values {
-		values[j] = math.Exp(value - s)
+		values[j] = float32(math.Exp(float64(value - s)))
 		sum += values[j]
 	}
 	for j, value := range values {
@@ -158,9 +158,9 @@ func SelfAttention(Q, K, V Matrix) Matrix {
 	o := Matrix{
 		Cols: V.Cols,
 		Rows: K.Rows,
-		Data: make([]float64, 0, V.Rows*K.Rows),
+		Data: make([]float32, 0, V.Rows*K.Rows),
 	}
-	outputs, values := make([]float64, V.Cols), make([]float64, Q.Rows)
+	outputs, values := make([]float32, V.Cols), make([]float32, Q.Rows)
 	V = V.T()
 	for i := 0; i < K.Rows; i++ {
 		K := K.Data[i*K.Cols : (i+1)*K.Cols]
@@ -180,12 +180,12 @@ func SelfAttention(Q, K, V Matrix) Matrix {
 }
 
 // MakeRandomTransform makes a random transform
-func MakeRandomTransform(rng *rand.Rand, cols, rows int, stddev float64) Matrix {
+func MakeRandomTransform(rng *rand.Rand, cols, rows int, stddev float32) Matrix {
 	transform := NewMatrix(cols, rows)
 	for i := 0; i < rows; i++ {
 		row := NewMatrix(cols, 1)
 		for j := 0; j < cols; j++ {
-			row.Data = append(row.Data, math.Abs(rng.NormFloat64()))
+			row.Data = append(row.Data, float32(math.Abs(rng.NormFloat64())))
 		}
 		row = row.Softmax(stddev)
 		for _, v := range row.Data {
