@@ -303,7 +303,7 @@ func Learn(data []byte) Neural {
 		go process(inputs[i], byte(i))
 	}
 
-	for i := 0; i < len(data); i++ {
+	for i := 0; i < 2*len(data); i++ {
 		index := rng.Intn(len(data) - 256)
 		m := NewMixer()
 		end := index + 8 + rng.Intn(120)
@@ -327,7 +327,7 @@ func Learn(data []byte) Neural {
 		fmt.Println("done", i)
 	}
 
-	err := set.Save("set.db", 0.0, len(data))
+	err := set.Save("set.db", 0.0, 2*len(data))
 	if err != nil {
 		panic(err)
 	}

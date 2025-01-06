@@ -488,7 +488,7 @@ func main() {
 		}*/
 		for i := 0; i < 33; i++ {
 			vector := m.MixFloat64() //Raw()
-			Softmax(vector[:], .15)
+			Softmax(vector[:], .01)
 			histogram := neural[m.Markov[0]].Distribution(vector[:])
 			//Softmax(histogram, .01)
 			total := 0.0
