@@ -467,6 +467,22 @@ func main() {
 		m.Add(s)
 	}
 	if *FlagNet {
+		file, err := Iris.Open("10.txt.utf-8.bz2")
+		if err != nil {
+			panic(err)
+		}
+		defer file.Close()
+		reader := bzip2.NewReader(file)
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			panic(err)
+		}
+		valid := make(map[byte]bool)
+		for _, v := range data {
+			valid[v] = true
+		}
+		fmt.Println("valid", len(valid))
+
 		rng := rand.New(rand.NewSource(1))
 		neural := Load()
 		solution := make([]byte, 0, 8)
@@ -488,7 +504,7 @@ func main() {
 		}*/
 		for i := 0; i < 33; i++ {
 			vector := m.MixFloat32() //Raw()
-			Softmax(vector[:], .01)
+			Softmax(vector[:], .001)
 			histogram := neural[m.Markov[0]].Distribution(vector[:])
 			//Softmax(histogram, .01)
 			total := float32(0.0)
@@ -498,13 +514,19 @@ func main() {
 			for i, v := range histogram {
 				histogram[i] = v / total
 			}
-			sum := float32(0.0)
-			selection := rng.Float32()
+
 			symbol := byte(0)
-			for i, v := range histogram {
-				sum += v
-				if selection < sum {
-					symbol = byte(i)
+			for {
+				selection := rng.Float32()
+				sum := float32(0.0)
+				for i, v := range histogram {
+					sum += v
+					if selection < sum {
+						symbol = byte(i)
+						break
+					}
+				}
+				if valid[symbol] {
 					break
 				}
 			}
