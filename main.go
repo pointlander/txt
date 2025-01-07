@@ -504,7 +504,7 @@ func main() {
 		}*/
 		for i := 0; i < 33; i++ {
 			vector := m.MixFloat32() //Raw()
-			Softmax(vector[:], .001)
+			Softmax(vector[:], 1)
 			histogram := neural[m.Markov[0]].Distribution(vector[:])
 			//Softmax(histogram, .01)
 			total := float32(0.0)
@@ -514,7 +514,6 @@ func main() {
 			for i, v := range histogram {
 				histogram[i] = v / total
 			}
-
 			symbol := byte(0)
 			for {
 				selection := rng.Float32()
