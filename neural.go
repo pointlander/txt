@@ -224,7 +224,7 @@ func Learn(data []byte) Neural {
 			}
 			output := others.ByName["output"].X
 			for j := 0; j < len(output); j += 2 {
-				output[j] = -1
+				output[j] = 0
 				output[j+1] = 0
 			}
 			output[2*in.Symbol] = 0
@@ -362,20 +362,8 @@ func (n *Neural) Distribution(input []float32) (d []float32) {
 	}
 	d = make([]float32, 256)
 	n.L4(func(a *tf32.V) bool {
-		min := float32(math.MaxFloat32)
-		for i := range a.X {
-			if a.X[i] < min {
-				min = a.X[i]
-			}
-		}
 		for i := range d {
-			x := a.X[2*i] - min
-			y := a.X[2*i+1]
-			if x > y {
-				d[i] = x
-			} else {
-				d[i] = y
-			}
+			d[i] = a.X[2*i+1]
 		}
 		return true
 	})
